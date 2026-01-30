@@ -1263,7 +1263,7 @@ def dashboard_panitia():
             else:
                 st.info("Tidak ada transaksi pada periode ini")
     
-    with tab4:
+    with tab5:
         st.subheader("Performa Warga")
         
         # Select warga
@@ -1325,7 +1325,7 @@ def dashboard_panitia():
         else:
             st.info("Belum ada transaksi")
     
-    with tab5:
+    with tab6:
         st.subheader("Pendapatan Panitia")
         
         col1, col2 = st.columns([1, 2])
