@@ -915,13 +915,16 @@ def dashboard_panitia():
                     </div>
                     """, unsafe_allow_html=True)
             else:
-                st.markdown(f"""
-                <div class="empty-state">
-                    {get_svg('empty_state')}
-                    <h3>Belum Ada Transaksi</h3>
-                    <p>Transaksi terbaru akan muncul di sini</p>
-                </div>
-                """, unsafe_allow_html=True)
+                st.markdown(
+                    """
+<div class="empty-state">
+    """ + get_svg('empty_state') + """
+    <h3>Belum Ada Transaksi</h3>
+    <p>Transaksi terbaru akan muncul di sini</p>
+</div>
+                    """,
+                    unsafe_allow_html=True,
+                )
     
     with tab2:
         st.subheader("Kelola Keuangan Warga")
@@ -1156,13 +1159,16 @@ def dashboard_panitia():
             )
             st.dataframe(df_warga, use_container_width=True, hide_index=True)
         else:
-            st.markdown(f"""
-            <div class="empty-state">
-                {get_svg('user')}
-                <h3>Belum Ada Warga Terdaftar</h3>
-                <p>Tambahkan warga baru menggunakan form di atas</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                """
+<div class="empty-state">
+    """ + get_svg('user') + """
+    <h3>Belum Ada Warga Terdaftar</h3>
+    <p>Tambahkan warga baru menggunakan form di atas</p>
+</div>
+                """,
+                unsafe_allow_html=True,
+            )
     
     with tab4:
         st.subheader("Laporan Keuangan")
@@ -1477,13 +1483,16 @@ def dashboard_warga():
             )
             st.dataframe(df_category, use_container_width=True, hide_index=True)
         else:
-            st.markdown(f"""
-            <div class="empty-state">
-                {get_svg('recycle')}
-                <h3>Belum Ada Data Transaksi</h3>
-                <p>Mulai jual sampah Anda untuk melihat statistik di sini</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                """
+<div class="empty-state">
+    """ + get_svg('recycle') + """
+    <h3>Belum Ada Data Transaksi</h3>
+    <p>Mulai jual sampah Anda untuk melihat statistik di sini</p>
+</div>
+                """,
+                unsafe_allow_html=True,
+            )
         
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -1502,13 +1511,16 @@ def dashboard_warga():
             )
             st.dataframe(df_trans, use_container_width=True, hide_index=True)
         else:
-            st.markdown(f"""
-            <div class="empty-state">
-                {get_svg('transaction')}
-                <h3>Belum Ada Transaksi</h3>
-                <p>Riwayat transaksi penjualan sampah Anda akan muncul di sini</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                """
+<div class="empty-state">
+    """ + get_svg('transaction') + """
+    <h3>Belum Ada Transaksi</h3>
+    <p>Riwayat transaksi penjualan sampah Anda akan muncul di sini</p>
+</div>
+                """,
+                unsafe_allow_html=True,
+            )
         
         st.markdown('</div>', unsafe_allow_html=True)
     
@@ -1531,13 +1543,16 @@ def dashboard_warga():
             )
             st.dataframe(df_movements, use_container_width=True, hide_index=True)
         else:
-            st.markdown(f"""
-            <div class="empty-state">
-                {get_svg('wallet')}
-                <h3>Belum Ada Riwayat Keuangan</h3>
-                <p>Riwayat penarikan dan deposit Anda akan muncul di sini</p>
-            </div>
-            """, unsafe_allow_html=True)
+            st.markdown(
+                """
+<div class="empty-state">
+    """ + get_svg('wallet') + """
+    <h3>Belum Ada Riwayat Keuangan</h3>
+    <p>Riwayat penarikan dan deposit Anda akan muncul di sini</p>
+</div>
+                """,
+                unsafe_allow_html=True,
+            )
         
         st.markdown('</div>', unsafe_allow_html=True)
 
