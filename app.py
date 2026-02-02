@@ -975,7 +975,7 @@ def dashboard_panitia():
             st.markdown("#### Jumlah Jenis Sampah")
             count_cols = st.columns([1, 2, 1])
             with count_cols[0]:
-                if st.button("➖", key="item_minus", width='stretch', disabled=st.session_state['item_count'] <= 1):
+                if st.button("➖", key="item_minus", use_container_width=True, disabled=st.session_state['item_count'] <= 1):
                     st.session_state['item_count'] = max(1, st.session_state['item_count'] - 1)
                     st.rerun()
             with count_cols[1]:
@@ -984,7 +984,7 @@ def dashboard_panitia():
                     unsafe_allow_html=True,
                 )
             with count_cols[2]:
-                if st.button("➕", key="item_plus", width='stretch', disabled=st.session_state['item_count'] >= 10):
+                if st.button("➕", key="item_plus", use_container_width=True, disabled=st.session_state['item_count'] >= 10):
                     st.session_state['item_count'] = min(10, st.session_state['item_count'] + 1)
                     st.rerun()
 
