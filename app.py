@@ -953,14 +953,14 @@ def dashboard_panitia():
     st.markdown(
         """
         <style>
-        /* Panitia tab navigation pinned to sidebar-style column */
-        div[data-testid="stTabs-panitia_tabs"] {
+        /* Scope only to panitia tab block */
+        .panitia-tabs [data-testid="stTabs"] {
             display: grid;
             grid-template-columns: 240px 1fr;
             gap: 1rem;
             align-items: start;
         }
-        div[data-testid="stTabs-panitia_tabs"] > div[role="tablist"] {
+        .panitia-tabs [data-testid="stTabs"] > div[role="tablist"] {
             grid-row: 1;
             display: flex;
             flex-direction: column;
@@ -972,7 +972,7 @@ def dashboard_panitia():
             position: sticky;
             top: 1rem;
         }
-        div[data-testid="stTabs-panitia_tabs"] > div[role="tablist"] button[role="tab"] {
+        .panitia-tabs [data-testid="stTabs"] > div[role="tablist"] button[role="tab"] {
             width: 100%;
             justify-content: flex-start;
             border-radius: 9px;
@@ -981,16 +981,16 @@ def dashboard_panitia():
             padding: 0.6rem 0.75rem;
             box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
         }
-        div[data-testid="stTabs-panitia_tabs"] > div[role="tablist"] button[aria-selected="true"] {
+        .panitia-tabs [data-testid="stTabs"] > div[role="tablist"] button[aria-selected="true"] {
             background: #0f67ff;
             color: #ffffff;
             border-color: #0f67ff;
         }
-        div[data-testid="stTabs-panitia_tabs"] > div[role="tablist"] button[role="tab"]:hover {
+        .panitia-tabs [data-testid="stTabs"] > div[role="tablist"] button[role="tab"]:hover {
             border-color: #0f67ff;
         }
         /* Stretch content area next to sidebar-like nav */
-        div[data-testid="stTabs-panitia_tabs"] > div:nth-of-type(2) {
+        .panitia-tabs [data-testid="stTabs"] > div:nth-of-type(2) {
             width: 100%;
         }
         </style>
@@ -998,7 +998,8 @@ def dashboard_panitia():
         unsafe_allow_html=True,
     )
 
-    tab1, tab_hist, tab_cat, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(panitia_tabs, key="panitia_tabs")
+    st.markdown('<div class="panitia-tabs">', unsafe_allow_html=True)
+    tab1, tab_hist, tab_cat, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(panitia_tabs)
     
     with tab1:
         st.subheader("➕ Input Transaksi Penjualan Sampah")
