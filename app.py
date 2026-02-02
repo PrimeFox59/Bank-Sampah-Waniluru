@@ -946,9 +946,59 @@ def dashboard_panitia():
     </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab_hist, tab_cat, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+    panitia_tabs = [
         "➕ Input Transaksi", "📜 History Transaksi", "♻️ Kategori & Harga", "💰 Kelola Keuangan", "👥 Kelola Warga", "📑 Laporan", "📈 Performa Warga", "💵 Pendapatan Panitia", "⚙️ Pengaturan Akun"
-    ])
+    ]
+
+    st.markdown(
+        """
+        <style>
+        /* Panitia tab navigation pinned to sidebar-style column */
+        div[data-testid="stTabs-panitia_tabs"] {
+            display: grid;
+            grid-template-columns: 240px 1fr;
+            gap: 1rem;
+            align-items: start;
+        }
+        div[data-testid="stTabs-panitia_tabs"] > div[role="tablist"] {
+            grid-row: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 0.4rem;
+            padding: 0.5rem;
+            background: #f6f9ff;
+            border: 1px solid #d9e6ff;
+            border-radius: 12px;
+            position: sticky;
+            top: 1rem;
+        }
+        div[data-testid="stTabs-panitia_tabs"] > div[role="tablist"] button[role="tab"] {
+            width: 100%;
+            justify-content: flex-start;
+            border-radius: 9px;
+            border: 1px solid #d9e6ff;
+            background: #ffffff;
+            padding: 0.6rem 0.75rem;
+            box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+        }
+        div[data-testid="stTabs-panitia_tabs"] > div[role="tablist"] button[aria-selected="true"] {
+            background: #0f67ff;
+            color: #ffffff;
+            border-color: #0f67ff;
+        }
+        div[data-testid="stTabs-panitia_tabs"] > div[role="tablist"] button[role="tab"]:hover {
+            border-color: #0f67ff;
+        }
+        /* Stretch content area next to sidebar-like nav */
+        div[data-testid="stTabs-panitia_tabs"] > div:nth-of-type(2) {
+            width: 100%;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    tab1, tab_hist, tab_cat, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(panitia_tabs, key="panitia_tabs")
     
     with tab1:
         st.subheader("➕ Input Transaksi Penjualan Sampah")
