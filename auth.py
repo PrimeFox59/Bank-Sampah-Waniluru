@@ -61,16 +61,16 @@ def get_all_users(role=None):
     conn.close()
     return users
 
-def create_user(username, password, full_name, role, nik="", address="", phone=""):
+def create_user(username, password, full_name, role, nickname="", address="", rt="", rw="", whatsapp=""):
     """Create a new user"""
     conn = get_connection()
     cursor = conn.cursor()
     
     try:
         cursor.execute('''
-            INSERT INTO users (username, password, full_name, nik, address, phone, role)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        ''', (username, hash_password(password), full_name, nik, address, phone, role))
+            INSERT INTO users (username, password, full_name, nickname, address, rt, rw, whatsapp, role)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (username, hash_password(password), full_name, nickname, address, rt, rw, whatsapp, role))
         conn.commit()
         user_id = cursor.lastrowid
         conn.close()
@@ -79,16 +79,16 @@ def create_user(username, password, full_name, role, nik="", address="", phone="
         conn.close()
         return False, str(e)
 
-def update_user(user_id, full_name, nik="", address="", phone=""):
+def update_user(user_id, full_name, nickname="", address="", rt="", rw="", whatsapp=""):
     """Update user information"""
     conn = get_connection()
     cursor = conn.cursor()
     try:
         cursor.execute('''
             UPDATE users 
-            SET full_name = ?, nik = ?, address = ?, phone = ?
+            SET full_name = ?, nickname = ?, address = ?, rt = ?, rw = ?, whatsapp = ?
             WHERE id = ?
-        ''', (full_name, nik, address, phone, user_id))
+        ''', (full_name, nickname, address, rt, rw, whatsapp, user_id))
         conn.commit()
         conn.close()
         return True, "User berhasil diupdate"

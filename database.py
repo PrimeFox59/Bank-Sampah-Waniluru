@@ -27,15 +27,30 @@ def init_database():
             username TEXT UNIQUE NOT NULL,
             password TEXT NOT NULL,
             full_name TEXT NOT NULL,
-            nik TEXT,
+            nickname TEXT,
             address TEXT,
-            phone TEXT,
-            role TEXT NOT NULL CHECK(role IN ('superuser', 'pengepul', 'panitia', 'warga')),
+            rt TEXT,
+            rw TEXT,
+            whatsapp TEXT,
+            role TEXT NOT NULL CHECK(role IN ('superuser', 'panitia', 'warga')),
             balance REAL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             active INTEGER DEFAULT 1
         )
     ''')
+
+    # Backward-compat: add new identity fields when upgrading an existing DB
+    cursor.execute("PRAGMA table_info(users)")
+    existing_cols = [col[1] for col in cursor.fetchall()]
+    new_columns = [
+        ("nickname", "TEXT", "''"),
+        ("rt", "TEXT", "''"),
+        ("rw", "TEXT", "''"),
+        ("whatsapp", "TEXT", "''"),
+    ]
+    for col_name, col_type, default in new_columns:
+        if col_name not in existing_cols:
+            cursor.execute(f"ALTER TABLE users ADD COLUMN {col_name} {col_type} DEFAULT {default}")
     
     # Categories table
     cursor.execute('''
@@ -130,19 +145,18 @@ def create_default_users():
     cursor = conn.cursor()
     
     default_users = [
-        ('superuser', 'admin123', 'Super Administrator', 'superuser', '', '', ''),
-        ('pengepul1', 'pengepul123', 'Pengepul Utama', 'pengepul', '3201234567890001', 'Jl. Raya Pengepul No. 123, Jakarta', '081234567890'),
-        ('panitia1', 'panitia123', 'Panitia Koordinator', 'panitia', '3201234567890002', 'Jl. Panitia Indah No. 45, Jakarta', '081234567891'),
-        ('warga1', 'warga123', 'Warga Contoh 1', 'warga', '3201234567890003', 'Jl. Warga Sejahtera No. 10, Jakarta', '081234567892'),
-        ('warga2', 'warga123', 'Warga Contoh 2', 'warga', '3201234567890004', 'Jl. Mawar Melati No. 25, Jakarta', '081234567893'),
+        ('superuser', 'admin123', 'Super Administrator', '', 'Jalan Super Admin 1', '', '', '081234567800', 'superuser'),
+        ('panitia1', 'panitia123', 'Panitia Koordinator', 'Koordinator', 'Jl. Panitia Indah No. 45, Jakarta', '01', '02', '081234567891', 'panitia'),
+        ('warga1', 'warga123', 'Warga Contoh 1', 'Mas Warga', 'Jl. Warga Sejahtera No. 10, Jakarta', '03', '04', '081234567892', 'warga'),
+        ('warga2', 'warga123', 'Warga Contoh 2', 'Mbak Warga', 'Jl. Mawar Melati No. 25, Jakarta', '03', '05', '081234567893', 'warga'),
     ]
     
-    for username, password, full_name, role, nik, address, phone in default_users:
+    for username, password, full_name, nickname, address, rt, rw, whatsapp, role in default_users:
         try:
             cursor.execute('''
-                INSERT INTO users (username, password, full_name, role, nik, address, phone)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (username, hash_password(password), full_name, role, nik, address, phone))
+                INSERT INTO users (username, password, full_name, nickname, address, rt, rw, whatsapp, role)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (username, hash_password(password), full_name, nickname, address, rt, rw, whatsapp, role))
         except sqlite3.IntegrityError:
             # User already exists
             pass

@@ -273,11 +273,6 @@ st.markdown("""
         color: white;
     }
     
-    .role-pengepul {
-        background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
-        color: white;
-    }
-    
     .role-panitia {
         background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
         color: white;
@@ -477,13 +472,6 @@ def login_page():
                 *Akses penuh sistem*
                 """)
                 
-                st.info("""
-                **🟠 Pengepul**  
-                Username: `pengepul1`  
-                Password: `pengepul123`  
-                *Kelola harga & kategori*
-                """)
-            
             with col_b:
                 st.info("""
                 **🔵 Panitia**  
@@ -1029,11 +1017,13 @@ def dashboard_panitia():
                     new_username = st.text_input("👤 Username", help="Username untuk login")
                     new_password = st.text_input("🔒 Password", type="password", help="Password minimal 6 karakter")
                     new_full_name = st.text_input("📝 Nama Lengkap", help="Nama lengkap sesuai KTP")
-                    new_nik = st.text_input("🆔 NIK (16 digit)", max_chars=16, help="Nomor Induk Kependudukan")
+                    new_nickname = st.text_input("🏷️ Nama Panggilan", help="Nama panggilan yang umum digunakan")
                 
                 with col_b:
                     new_address = st.text_area("🏠 Alamat Lengkap", help="Alamat sesuai KTP")
-                    new_phone = st.text_input("📱 No. Telepon", help="Nomor HP/WA yang aktif")
+                    new_rt = st.text_input("🏘️ RT", help="RT tempat tinggal")
+                    new_rw = st.text_input("🏘️ RW", help="RW tempat tinggal")
+                    new_whatsapp = st.text_input("📱 No. WhatsApp", help="Nomor WA yang aktif")
                     new_role = st.selectbox("👔 Role", ["warga", "panitia"], help="Pilih role untuk user baru")
                 
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -1043,12 +1033,10 @@ def dashboard_panitia():
                     if new_username and new_password and new_full_name:
                         if len(new_password) < 6:
                             st.error("❌ Password minimal 6 karakter!")
-                        elif new_nik and len(new_nik) != 16:
-                            st.error("❌ NIK harus 16 digit!")
                         else:
                             success, result = create_user(
                                 new_username, new_password, new_full_name, new_role,
-                                new_nik, new_address, new_phone
+                                new_nickname, new_address, new_rt, new_rw, new_whatsapp
                             )
                             
                             if success:
@@ -1081,31 +1069,30 @@ def dashboard_panitia():
                         
                         with col_a:
                             edit_full_name = st.text_input("📝 Nama Lengkap", value=warga['full_name'] or "")
-                            edit_nik = st.text_input("🆔 NIK (16 digit)", value=warga['nik'] or "", max_chars=16)
+                            edit_nickname = st.text_input("🏷️ Nama Panggilan", value=warga.get('nickname') or "")
                         
                         with col_b:
                             edit_address = st.text_area("🏠 Alamat Lengkap", value=warga['address'] or "")
-                            edit_phone = st.text_input("📱 No. Telepon", value=warga['phone'] or "")
+                            edit_rt = st.text_input("🏘️ RT", value=warga.get('rt') or "")
+                            edit_rw = st.text_input("🏘️ RW", value=warga.get('rw') or "")
+                            edit_whatsapp = st.text_input("📱 No. WhatsApp", value=warga.get('whatsapp') or "")
                         
                         st.markdown("<br>", unsafe_allow_html=True)
                         submitted_edit = st.form_submit_button("💾 Simpan Perubahan", use_container_width=True, type="primary")
                         
                         if submitted_edit:
                             if edit_full_name:
-                                if edit_nik and len(edit_nik) != 16:
-                                    st.error("❌ NIK harus 16 digit!")
+                                success, message = update_user(
+                                    warga['id'], edit_full_name, edit_nickname, edit_address, edit_rt, edit_rw, edit_whatsapp
+                                )
+                                
+                                if success:
+                                    log_audit(st.session_state['user']['id'], 'UPDATE_USER',
+                                            f"Updated user {warga['username']}")
+                                    st.success(f"✅ {message}")
+                                    st.rerun()
                                 else:
-                                    success, message = update_user(
-                                        warga['id'], edit_full_name, edit_nik, edit_address, edit_phone
-                                    )
-                                    
-                                    if success:
-                                        log_audit(st.session_state['user']['id'], 'UPDATE_USER',
-                                                f"Updated user {warga['username']}")
-                                        st.success(f"✅ {message}")
-                                        st.rerun()
-                                    else:
-                                        st.error(f"❌ Gagal update: {message}")
+                                    st.error(f"❌ Gagal update: {message}")
                             else:
                                 st.warning("⚠️ Nama Lengkap wajib diisi!")
             else:
@@ -1151,12 +1138,13 @@ def dashboard_panitia():
         all_warga = get_all_users('warga')
         
         if all_warga:
-            df_warga = pd.DataFrame(
-                [(w['id'], w['username'], w['full_name'], w['nik'] or '-', 
-                  w['phone'] or '-', f"Rp {w['balance']:,.0f}",
-                  'Aktif' if w['active'] else 'Non-Aktif') for w in all_warga],
-                columns=['ID', 'Username', 'Nama Lengkap', 'NIK', 'Telepon', 'Saldo', 'Status']
-            )
+                        df_warga = pd.DataFrame(
+                                [(w['id'], w['username'], w['full_name'], w.get('nickname') or '-',
+                                    f"RT {w.get('rt') or '-'} / RW {w.get('rw') or '-'}",
+                                    w.get('whatsapp') or '-', f"Rp {w['balance']:,.0f}",
+                                    'Aktif' if w['active'] else 'Non-Aktif') for w in all_warga],
+                                columns=['ID', 'Username', 'Nama Lengkap', 'Panggilan', 'RT/RW', 'WhatsApp', 'Saldo', 'Status']
+                        )
             st.dataframe(df_warga, use_container_width=True, hide_index=True)
         else:
             st.markdown(
@@ -1596,7 +1584,7 @@ def dashboard_superuser():
                 new_username = st.text_input("Username")
                 new_password = st.text_input("Password", type="password")
                 new_full_name = st.text_input("Nama Lengkap")
-                new_role = st.selectbox("Role", ["warga", "panitia", "pengepul", "superuser"])
+                new_role = st.selectbox("Role", ["warga", "panitia", "superuser"])
                 
                 submitted = st.form_submit_button("Tambah User", use_container_width=True)
                 
@@ -1797,13 +1785,11 @@ def main():
         user = st.session_state['user']
         role_colors = {
             'superuser': 'role-superuser',
-            'pengepul': 'role-pengepul',
             'panitia': 'role-panitia',
             'warga': 'role-warga'
         }
         role_icons = {
             'superuser': '⚡',
-            'pengepul': '📦',
             'panitia': '📊',
             'warga': '👤'
         }
@@ -1855,14 +1841,6 @@ def main():
                 - ✅ Lihat audit log
                 - ✅ Monitoring sistem
                 """)
-            elif user['role'] == 'pengepul':
-                st.markdown("""
-                **Pengepul dapat:**
-                - ✅ Tambah/edit kategori
-                - ✅ Set harga barang
-                - ✅ Lihat performa penjualan
-                - ✅ Monitoring transaksi
-                """)
             elif user['role'] == 'panitia':
                 st.markdown("""
                 **Panitia dapat:**
@@ -1905,7 +1883,8 @@ def main():
     if role == 'superuser':
         dashboard_superuser()
     elif role == 'pengepul':
-        dashboard_pengepul()
+        st.info("Role pengepul telah digabung ke panitia. Mengarahkan ke dashboard panitia.")
+        dashboard_panitia()
     elif role == 'panitia':
         dashboard_panitia()
     elif role == 'warga':
