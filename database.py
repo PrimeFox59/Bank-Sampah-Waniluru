@@ -75,6 +75,7 @@ def init_database():
             committee_fee REAL NOT NULL,
             net_amount REAL NOT NULL,
             processed_by INTEGER NOT NULL,
+            batch_id TEXT DEFAULT '',
             transaction_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             notes TEXT,
             FOREIGN KEY (warga_id) REFERENCES users(id),
@@ -135,7 +136,21 @@ def init_database():
             FOREIGN KEY (acting_as_user_id) REFERENCES users(id)
         )
     ''')
+
+    # System settings (e.g., dummy data toggle)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS system_settings (
+            key TEXT PRIMARY KEY,
+            value TEXT
+        )
+    ''')
     
+    # Backward-compat: add batch_id if missing
+    cursor.execute("PRAGMA table_info(transactions)")
+    t_cols = [col[1] for col in cursor.fetchall()]
+    if 'batch_id' not in t_cols:
+        cursor.execute('ALTER TABLE transactions ADD COLUMN batch_id TEXT DEFAULT ""')
+
     conn.commit()
     conn.close()
 
@@ -198,6 +213,29 @@ def initialize_system():
     create_default_users()
     create_default_categories()
     print("Database initialized successfully!")
+
+
+def get_setting(key, default=None):
+    """Retrieve a simple key/value setting"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT value FROM system_settings WHERE key = ?', (key,))
+    row = cursor.fetchone()
+    conn.close()
+    return row[0] if row else default
+
+
+def set_setting(key, value):
+    """Upsert a simple key/value setting"""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        INSERT INTO system_settings (key, value)
+        VALUES (?, ?)
+        ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    ''', (key, value))
+    conn.commit()
+    conn.close()
 
 if __name__ == '__main__':
     initialize_system()

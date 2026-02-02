@@ -1,10 +1,16 @@
 import streamlit as st
-from database import initialize_system
-from auth import authenticate_user, log_audit, check_superuser_session, end_superuser_session, get_all_users, start_superuser_session, get_user_by_id, create_user, update_user, delete_user
+from database import initialize_system, get_connection, get_setting, set_setting
+from auth import authenticate_user, log_audit, check_superuser_session, end_superuser_session, get_all_users, start_superuser_session, get_user_by_id, create_user, update_user, update_user_password, delete_user
 from utils import *
 from svg_icons import get_svg
 import pandas as pd
 from datetime import datetime, timedelta
+import io
+import uuid
+import random
+from fpdf import FPDF
+
+DUMMY_TAG = "[DUMMY DATA]"
 
 # Page configuration
 st.set_page_config(
@@ -403,6 +409,159 @@ initialize_system()
 if 'user' not in st.session_state:
     st.session_state['user'] = None
 
+
+def _ensure_user(username, password, full_name, nickname, address, rt, rw, whatsapp, role):
+    """Get or create a user and return (success, user_id or message)."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('SELECT id FROM users WHERE username = ?', (username,))
+    row = cursor.fetchone()
+    if row:
+        conn.close()
+        return True, row['id']
+    conn.close()
+    success, result = create_user(username, password, full_name, role, nickname, address, rt, rw, whatsapp)
+    return success, result if success else result
+
+
+def seed_dummy_data(superuser_id):
+    """Populate richer demo data: 50 warga, 100 transaksi (2025-2026), plus a panitia handler."""
+
+    random.seed(42)
+
+    # Build dummy users
+    dummy_users = [
+        {
+            'username': 'demo_panitia',
+            'password': 'demo123',
+            'full_name': 'Panitia Demo',
+            'nickname': 'Pak Demo',
+            'address': 'Jl. Contoh Panitia No. 8',
+            'rt': '01',
+            'rw': '02',
+            'whatsapp': '081234560001',
+            'role': 'panitia',
+        }
+    ]
+
+    # Generate 50 warga accounts
+    for i in range(1, 51):
+        dummy_users.append({
+            'username': f'demo_warga{i}',
+            'password': 'demo123',
+            'full_name': f'Warga Demo {i:02d}',
+            'nickname': f'Demo {i:02d}',
+            'address': f'Jl. Contoh Warga No. {i}',
+            'rt': f"{(i % 10) + 1:02d}",
+            'rw': f"{(i % 15) + 1:02d}",
+            'whatsapp': f"08123456{1000 + i:03d}",
+            'role': 'warga',
+        })
+
+    # Ensure users exist
+    user_ids = {}
+    for du in dummy_users:
+        success, res = _ensure_user(
+            du['username'], du['password'], du['full_name'],
+            du['nickname'], du['address'], du['rt'], du['rw'], du['whatsapp'], du['role']
+        )
+        if not success:
+            return False, f"Gagal menambahkan user {du['username']}: {res}"
+        user_ids[du['username']] = res
+
+    panitia_id = user_ids['demo_panitia']
+    warga_ids = [user_ids[k] for k in user_ids if k.startswith('demo_warga')]
+
+    # Ensure categories exist and have variety
+    categories = {c['name']: c['id'] for c in get_all_categories()}
+    needed_categories = {
+        'Plastik Botol': 3200,
+        'Kardus': 1700,
+        'Kaleng Aluminium': 5200,
+        'Elektronik Kecil': 8500,
+        'Kertas Campur': 1200,
+        'Minyak Jelantah': 6000,
+    }
+    for name, price in needed_categories.items():
+        if name not in categories:
+            created, _ = create_category(name, price)
+            if not created:
+                return False, f"Gagal menambah kategori {name}"
+    categories = {c['name']: c['id'] for c in get_all_categories()}
+    category_ids = list(categories.values())
+
+    # Prepare date range 2025-01-01 to 2026-12-31
+    start_date = datetime(2025, 1, 1)
+    end_date = datetime(2026, 12, 31)
+    total_days = (end_date - start_date).days
+
+    # Create 100 transactions with random warga/category/weight/date
+    for idx in range(100):
+        warga_id = random.choice(warga_ids)
+        category_id = random.choice(category_ids)
+        weight = round(random.uniform(1.0, 20.0), 2)
+        t_date = start_date + timedelta(days=random.randint(0, total_days))
+        note = f"{DUMMY_TAG} Transaksi demo ke-{idx + 1}"
+        create_transaction(
+            warga_id,
+            category_id,
+            weight,
+            panitia_id,
+            notes=note,
+            batch_id=str(uuid.uuid4()),
+            transaction_date=t_date,
+        )
+
+    # Seed a few deposits/withdrawals for the first few warga to show movement history
+    for warga_id in warga_ids[:5]:
+        process_deposit(
+            warga_id,
+            random.randint(50_000, 200_000),
+            panitia_id,
+            notes=f"{DUMMY_TAG} Setoran saldo awal",
+        )
+        process_withdrawal(
+            warga_id,
+            random.randint(20_000, 80_000),
+            panitia_id,
+            notes=f"{DUMMY_TAG} Penarikan demo",
+        )
+
+    set_setting('dummy_data_active', '1')
+    log_audit(superuser_id, 'DUMMY_DATA_ON', 'Superuser menyalakan data dummy demo (50 warga, 100 transaksi)')
+    return True, "Data dummy detail (50 warga, 100 transaksi) berhasil dibuat"
+
+
+def clear_dummy_data(superuser_id):
+    """Remove all demo data without touching real records."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Delete committee earnings tied to dummy transactions first
+    cursor.execute(
+        "DELETE FROM committee_earnings WHERE transaction_id IN (SELECT id FROM transactions WHERE notes LIKE ?)",
+        (f"%{DUMMY_TAG}%",),
+    )
+
+    # Delete dummy transactions
+    cursor.execute("DELETE FROM transactions WHERE notes LIKE ?", (f"%{DUMMY_TAG}%",))
+
+    # Delete dummy financial movements
+    cursor.execute("DELETE FROM financial_movements WHERE notes LIKE ?", (f"%{DUMMY_TAG}%",))
+
+    # Remove dummy users last to avoid FK issues
+    cursor.execute(
+        "DELETE FROM users WHERE username = ? OR username LIKE ?",
+        ('demo_panitia', 'demo_warga%'),
+    )
+
+    conn.commit()
+    conn.close()
+
+    set_setting('dummy_data_active', '0')
+    log_audit(superuser_id, 'DUMMY_DATA_OFF', 'Superuser mematikan data dummy demo')
+    return True, "Data dummy berhasil dihapus"
+
 def login_page():
     """Display login page"""
     
@@ -787,12 +946,11 @@ def dashboard_panitia():
     </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "➕ Input Transaksi", "💰 Kelola Keuangan", "👥 Kelola Warga", "📑 Laporan", "📈 Performa Warga", "💵 Pendapatan Panitia"
+    tab1, tab_hist, tab_cat, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "➕ Input Transaksi", "📜 History Transaksi", "♻️ Kategori & Harga", "💰 Kelola Keuangan", "👥 Kelola Warga", "📑 Laporan", "📈 Performa Warga", "💵 Pendapatan Panitia", "⚙️ Pengaturan Akun"
     ])
     
     with tab1:
-        st.markdown('<div class="info-card">', unsafe_allow_html=True)
         st.subheader("➕ Input Transaksi Penjualan Sampah")
         
         # Help text
@@ -811,6 +969,29 @@ def dashboard_panitia():
         col1, col2 = st.columns([2, 1])
         
         with col1:
+            if 'item_count' not in st.session_state:
+                st.session_state['item_count'] = 1
+
+            st.markdown("#### Jumlah Jenis Sampah")
+            count_cols = st.columns([1, 2, 1])
+            with count_cols[0]:
+                if st.button("➖", key="item_minus", width='stretch', disabled=st.session_state['item_count'] <= 1):
+                    st.session_state['item_count'] = max(1, st.session_state['item_count'] - 1)
+                    st.rerun()
+            with count_cols[1]:
+                st.markdown(
+                    f"<div style='text-align:center; font-size:1.3rem; font-weight:700;'>{st.session_state['item_count']}</div>",
+                    unsafe_allow_html=True,
+                )
+            with count_cols[2]:
+                if st.button("➕", key="item_plus", width='stretch', disabled=st.session_state['item_count'] >= 10):
+                    st.session_state['item_count'] = min(10, st.session_state['item_count'] + 1)
+                    st.rerun()
+
+            item_count = st.session_state['item_count']
+
+            pdf_placeholder = st.empty()
+
             with st.form("transaction_form"):
                 st.markdown("### 📝 Form Input Transaksi")
                 
@@ -823,31 +1004,55 @@ def dashboard_panitia():
                 
                 # Get categories
                 categories = get_all_categories()
-                category_options = {f"♻️ {c['name']} - Rp {c['price_per_kg']:,.0f}/Kg": c['id'] for c in categories}
-                
-                selected_category = st.selectbox("♻️ Pilih Kategori Sampah", list(category_options.keys()),
-                                                help="Kategori sampah beserta harga per Kg saat ini")
-                
-                weight = st.number_input("⚖️ Berat (Kg)", min_value=0.0, step=0.1, format="%.2f",
-                                        help="Masukkan berat sampah dalam kilogram (Kg)")
-                
-                # Show preview calculation
-                if weight > 0:
-                    selected_cat_id = category_options[selected_category]
-                    cat_data = next(c for c in categories if c['id'] == selected_cat_id)
-                    preview_total = weight * cat_data['price_per_kg']
-                    preview_fee = preview_total * 0.10
-                    preview_net = preview_total - preview_fee
-                    
+                category_options = {f"♻️ {c['name']} - Rp {c['price_per_kg']:,.0f}/Kg": c for c in categories}
+
+                batch_id = f"batch-{int(datetime.now().timestamp())}-{uuid.uuid4().hex[:6]}"
+                items = []
+                total_preview = 0
+                total_fee_preview = 0
+                for idx in range(int(item_count)):
+                    st.markdown(f"**Item {idx+1}**")
+                    col_i1, col_i2 = st.columns([3, 1])
+
+                    with col_i1:
+                        cat_label = st.selectbox(
+                            "Pilih Kategori",
+                            list(category_options.keys()),
+                            key=f"cat_{idx}",
+                            help="Pilih kategori sampah",
+                        )
+                        cat_data = category_options[cat_label]
+
+                    with col_i2:
+                        weight = st.number_input(
+                            "Berat (Kg)", min_value=0.0, step=0.1, format="%.2f",
+                            key=f"weight_{idx}",
+                            help="Masukkan berat untuk kategori ini"
+                        )
+
+                    if weight > 0:
+                        item_total = weight * cat_data['price_per_kg']
+                        fee = item_total * 0.10
+                        total_preview += item_total
+                        total_fee_preview += fee
+                    items.append({
+                        'category_id': cat_data['id'],
+                        'category_name': cat_data['name'],
+                        'weight': weight,
+                        'price': cat_data['price_per_kg'],
+                    })
+
+                total_net_preview = total_preview - total_fee_preview
+                if total_preview > 0:
                     st.markdown(f"""
                     <div style="background: #E3F2FD; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
-                        <p style="margin: 0; color: #0D47A1; font-weight: 600;">💡 Preview Perhitungan:</p>
-                        <p style="margin: 0.3rem 0; color: #1E88E5;">Total Kotor: <strong>Rp {preview_total:,.0f}</strong></p>
-                        <p style="margin: 0.3rem 0; color: #1E88E5;">Fee Panitia (10%): <strong>Rp {preview_fee:,.0f}</strong></p>
-                        <p style="margin: 0.3rem 0; color: #0D47A1; font-size: 1.1rem;">Warga Terima: <strong>Rp {preview_net:,.0f}</strong></p>
+                        <p style="margin: 0; color: #0D47A1; font-weight: 600;">💡 Preview Multi-Item:</p>
+                        <p style="margin: 0.3rem 0; color: #1E88E5;">Total Kotor: <strong>Rp {total_preview:,.0f}</strong></p>
+                        <p style="margin: 0.3rem 0; color: #1E88E5;">Fee Panitia (10%): <strong>Rp {total_fee_preview:,.0f}</strong></p>
+                        <p style="margin: 0.3rem 0; color: #0D47A1; font-size: 1.1rem;">Warga Terima: <strong>Rp {total_net_preview:,.0f}</strong></p>
                     </div>
                     """, unsafe_allow_html=True)
-                
+
                 notes = st.text_area("📌 Catatan (Opsional)", 
                                     help="Tambahkan catatan jika diperlukan, misal: kondisi sampah, dll")
                 
@@ -855,39 +1060,145 @@ def dashboard_panitia():
                 submitted = st.form_submit_button("🚀 Proses Transaksi Sekarang", use_container_width=True, type="primary")
                 
                 if submitted:
-                    if weight > 0:
-                        warga_id = warga_options[selected_warga]
-                        category_id = category_options[selected_category]
-                        
-                        with st.spinner("⏳ Memproses transaksi..."):
-                            success, transaction_id, details = create_transaction(
-                                warga_id, category_id, weight, 
-                                st.session_state['user']['id'], notes
-                            )
-                        
-                        if success:
-                            log_audit(st.session_state['user']['id'], 'CREATE_TRANSACTION',
-                                    f"Transaction {transaction_id} for warga {warga_id}")
-                            
-                            st.success("✅ Transaksi berhasil diproses!")
-                            st.balloons()
-                            
-                            # Better detail display
-                            st.markdown(f"""
-                            <div class="info-card" style="background: #E8F5E9; border-color: #4CAF50;">
-                                <h3 style="color: #2E7D32; margin-top: 0;">💰 Detail Transaksi #{transaction_id}</h3>
-                                <table style="width: 100%; color: #1B5E20;">
-                                    <tr><td><strong>Total Kotor:</strong></td><td style="text-align: right;"><strong>Rp {details['total_amount']:,.0f}</strong></td></tr>
-                                    <tr><td>Fee Panitia (10%):</td><td style="text-align: right;">Rp {details['committee_fee']:,.0f}</td></tr>
-                                    <tr style="border-top: 2px solid #4CAF50;"><td><strong>Diterima Warga:</strong></td><td style="text-align: right; font-size: 1.2rem;"><strong>Rp {details['net_amount']:,.0f}</strong></td></tr>
-                                    <tr><td><strong>Saldo Baru Warga:</strong></td><td style="text-align: right; color: #2E7D32; font-size: 1.2rem;"><strong>Rp {details['new_balance']:,.0f}</strong></td></tr>
-                                </table>
-                            </div>
-                            """, unsafe_allow_html=True)
-                            st.rerun()
+                    invalid = [item for item in items if item['weight'] <= 0]
+                    if invalid:
+                        st.warning("⚠️ Semua berat harus lebih dari 0!")
                     else:
-                        st.warning("⚠️ Berat harus lebih dari 0!")
-        
+                        warga_id = warga_options[selected_warga]
+                        processed_by = st.session_state['user']['id']
+                        summary_rows = []
+                        total_amount = 0
+                        total_fee = 0
+                        total_net = 0
+                        with st.spinner("⏳ Memproses transaksi multi-item..."):
+                            for item in items:
+                                success, transaction_id, details = create_transaction(
+                                    warga_id, item['category_id'], item['weight'], processed_by, notes, batch_id=batch_id
+                                )
+                                if success:
+                                    summary_rows.append({
+                                        'id': transaction_id,
+                                        'kategori': item['category_name'],
+                                        'berat': item['weight'],
+                                        'harga': item['price'],
+                                        'total': details['total_amount'],
+                                        'fee': details['committee_fee'],
+                                        'net': details['net_amount'],
+                                    })
+                                    total_amount += details['total_amount']
+                                    total_fee += details['committee_fee']
+                                    total_net += details['net_amount']
+
+                        log_audit(processed_by, 'CREATE_TRANSACTION',
+                                  f"Multi-item transaction ({len(items)} items) for warga {warga_id}")
+
+                        st.success("✅ Transaksi multi-item berhasil diproses!")
+                        st.balloons()
+
+                        # Detail display per item
+                        st.markdown(
+                            "<div class=\"info-card\" style=\"background: #E8F5E9; border-color: #4CAF50;\">",
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown("<h3 style='color: #2E7D32; margin-top: 0;'>💰 Ringkasan Transaksi</h3>", unsafe_allow_html=True)
+                        item_df = pd.DataFrame(
+                            [
+                                (
+                                    row['id'], row['kategori'], f"{row['berat']:.2f} Kg",
+                                    f"Rp {row['harga']:,.0f}", f"Rp {row['total']:,.0f}",
+                                    f"Rp {row['fee']:,.0f}", f"Rp {row['net']:,.0f}",
+                                )
+                                for row in summary_rows
+                            ],
+                            columns=['ID', 'Kategori', 'Berat', 'Harga/Kg', 'Total', 'Fee', 'Diterima'],
+                        )
+                        st.dataframe(item_df, use_container_width=True, hide_index=True)
+
+                        st.markdown(f"""
+                        <table style="width: 100%; color: #1B5E20;">
+                            <tr><td><strong>Total Kotor:</strong></td><td style="text-align: right;"><strong>Rp {total_amount:,.0f}</strong></td></tr>
+                            <tr><td>Fee Panitia (10%):</td><td style="text-align: right;">Rp {total_fee:,.0f}</td></tr>
+                            <tr style="border-top: 2px solid #4CAF50;"><td><strong>Diterima Warga:</strong></td><td style="text-align: right; font-size: 1.2rem;"><strong>Rp {total_net:,.0f}</strong></td></tr>
+                        </table>
+                        """, unsafe_allow_html=True)
+                        st.markdown("</div>", unsafe_allow_html=True)
+
+                        # PDF receipt
+                        warga_detail = get_user_by_id(warga_id)
+                        warga_name = warga_detail['full_name'] if warga_detail else "-"
+                        processor = st.session_state['user']['full_name']
+                        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                        class ReceiptPDF(FPDF):
+                            def header(self):
+                                self.set_fill_color(76, 175, 80)
+                                self.rect(10, 8, 190, 18, 'F')
+                                self.set_text_color(255, 255, 255)
+                                self.set_font('Helvetica', 'B', 14)
+                                self.cell(0, 10, 'Nota Transaksi Bank Sampah', ln=True, align='C')
+                                self.set_font('Helvetica', '', 10)
+                                self.cell(0, 6, 'Bank Sampah Wani Luru', ln=True, align='C')
+                                self.ln(5)
+                                self.set_text_color(0, 0, 0)
+
+                        pdf = ReceiptPDF()
+                        pdf.add_page()
+                        pdf.set_auto_page_break(auto=True, margin=15)
+
+                        pdf.set_font('Helvetica', '', 11)
+                        pdf.cell(0, 8, f"Warga: {warga_name}", ln=True)
+                        pdf.cell(0, 8, f"Diproses oleh: {processor}", ln=True)
+                        pdf.cell(0, 8, f"Tanggal: {timestamp}", ln=True)
+                        if notes:
+                            pdf.multi_cell(0, 8, f"Catatan: {notes}")
+                        pdf.ln(4)
+
+                        # Table header with green fill (widths sum to 190)
+                        w_id, w_cat, w_weight, w_price, w_total, w_fee, w_net = 12, 55, 22, 28, 28, 22, 23
+                        pdf.set_fill_color(76, 175, 80)
+                        pdf.set_text_color(255, 255, 255)
+                        pdf.set_font('Helvetica', 'B', 10)
+                        pdf.cell(w_id, 8, 'ID', border=1, align='C', fill=True)
+                        pdf.cell(w_cat, 8, 'Kategori', border=1, fill=True)
+                        pdf.cell(w_weight, 8, 'Berat', border=1, align='R', fill=True)
+                        pdf.cell(w_price, 8, 'Harga/Kg', border=1, align='R', fill=True)
+                        pdf.cell(w_total, 8, 'Total', border=1, align='R', fill=True)
+                        pdf.cell(w_fee, 8, 'Fee', border=1, align='R', fill=True)
+                        pdf.cell(w_net, 8, 'Diterima', border=1, ln=True, align='R', fill=True)
+
+                        pdf.set_text_color(0, 0, 0)
+                        pdf.set_font('Helvetica', '', 10)
+                        for row in summary_rows:
+                            pdf.cell(w_id, 8, str(row['id']), border=1, align='C')
+                            pdf.cell(w_cat, 8, row['kategori'][:24], border=1)
+                            pdf.cell(w_weight, 8, f"{row['berat']:.2f} Kg", border=1, align='R')
+                            pdf.cell(w_price, 8, f"Rp {row['harga']:,.0f}", border=1, align='R')
+                            pdf.cell(w_total, 8, f"Rp {row['total']:,.0f}", border=1, align='R')
+                            pdf.cell(w_fee, 8, f"Rp {row['fee']:,.0f}", border=1, align='R')
+                            pdf.cell(w_net, 8, f"Rp {row['net']:,.0f}", border=1, ln=True, align='R')
+
+                        # Totals section
+                        pdf.set_fill_color(232, 245, 233)
+                        pdf.set_font('Helvetica', 'B', 10)
+                        pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Total Kotor', border=1, fill=True)
+                        pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_amount:,.0f}", border=1, ln=True, align='R', fill=True)
+                        pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Fee Panitia (10%)', border=1, fill=True)
+                        pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_fee:,.0f}", border=1, ln=True, align='R', fill=True)
+                        pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Diterima Warga', border=1, fill=True)
+                        pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_net:,.0f}", border=1, ln=True, align='R', fill=True)
+
+                        pdf.ln(6)
+                        pdf.set_font('Helvetica', 'B', 11)
+                        pdf.set_text_color(76, 175, 80)
+                        pdf.cell(0, 8, 'Go Green', ln=True)
+                        pdf.set_text_color(0, 0, 0)
+                        pdf.set_font('Helvetica', '', 9)
+                        pdf.multi_cell(0, 6, "Kurangi penggunaan kertas, simpan nota ini secara digital.")
+
+                        pdf_data = pdf.output(dest="S").encode("latin-1")
+                        st.session_state['last_pdf_data'] = pdf_data
+                        st.session_state['last_pdf_name'] = f"nota_{summary_rows[0]['id']}.pdf"
+
         with col2:
             st.markdown("### 🕐 Transaksi Terakhir")
             recent_transactions = get_transactions(limit=5)
@@ -913,9 +1224,251 @@ def dashboard_panitia():
                     """,
                     unsafe_allow_html=True,
                 )
+
+        # Render download button outside the form if available
+        if st.session_state.get('last_pdf_data'):
+            pdf_placeholder.download_button(
+                label="⬇️ Download Nota (PDF)",
+                data=st.session_state['last_pdf_data'],
+                file_name=st.session_state.get('last_pdf_name', 'nota.pdf'),
+                mime="application/pdf",
+                type="primary",
+                help="Unduh nota transaksi dalam bentuk PDF",
+            )
+
+    with tab_hist:
+        st.subheader("📜 History Transaksi & Nota")
+        st.markdown("Unduh nota PDF untuk transaksi yang sudah tercatat.")
+
+        transactions = get_transactions(limit=200)
+
+        if transactions:
+            grouped = {}
+            for t in transactions:
+                key = t['batch_id'] if t['batch_id'] else f"single-{t['id']}"
+                if key not in grouped:
+                    grouped[key] = {
+                        'batch_id': key,
+                        'warga_name': t['warga_name'],
+                        'processed_by_name': t['processed_by_name'],
+                        'notes': t['notes'],
+                        'transaction_date': t['transaction_date'],
+                        'items': [],
+                    }
+                grouped[key]['items'].append(t)
+
+            for batch_key, data in grouped.items():
+                total_amount = sum(it['total_amount'] for it in data['items'])
+                total_fee = sum(it['committee_fee'] for it in data['items'])
+                total_net = sum(it['net_amount'] for it in data['items'])
+                total_weight = sum(it['weight_kg'] for it in data['items'])
+                with st.expander(f"#{batch_key} | {data['warga_name']} | {len(data['items'])} item | {total_weight:.2f} Kg | Rp {total_net:,.0f}"):
+                    st.write(f"Tanggal: {data['transaction_date']}")
+                    st.write(f"Diproses oleh: {data['processed_by_name']}")
+                    st.write(f"Catatan: {data['notes'] or '-'}")
+
+                    class SingleReceiptPDF(FPDF):
+                        def header(self):
+                            self.set_fill_color(76, 175, 80)
+                            self.rect(10, 8, 190, 18, 'F')
+                            self.set_text_color(255, 255, 255)
+                            self.set_font('Helvetica', 'B', 14)
+                            self.cell(0, 10, 'Nota Transaksi Bank Sampah', ln=True, align='C')
+                            self.set_font('Helvetica', '', 10)
+                            self.cell(0, 6, 'Bank Sampah Wani Luru', ln=True, align='C')
+                            self.ln(5)
+                            self.set_text_color(0, 0, 0)
+
+                    pdf = SingleReceiptPDF()
+                    pdf.add_page()
+                    pdf.set_auto_page_break(auto=True, margin=15)
+
+                    pdf.set_font('Helvetica', '', 11)
+                    pdf.cell(0, 8, f"Batch/Transaksi: {batch_key}", ln=True)
+                    pdf.cell(0, 8, f"Warga: {data['warga_name']}", ln=True)
+                    pdf.cell(0, 8, f"Diproses oleh: {data['processed_by_name']}", ln=True)
+                    pdf.cell(0, 8, f"Tanggal: {data['transaction_date']}", ln=True)
+                    if data['notes']:
+                        pdf.multi_cell(0, 8, f"Catatan: {data['notes']}")
+                    pdf.ln(4)
+
+                    # Tabel item
+                    w_id, w_cat, w_weight, w_price, w_total, w_fee, w_net = 12, 55, 22, 28, 28, 22, 23
+                    pdf.set_fill_color(76, 175, 80)
+                    pdf.set_text_color(255, 255, 255)
+                    pdf.set_font('Helvetica', 'B', 10)
+                    pdf.cell(w_id, 8, 'ID', border=1, align='C', fill=True)
+                    pdf.cell(w_cat, 8, 'Kategori', border=1, fill=True)
+                    pdf.cell(w_weight, 8, 'Berat', border=1, align='R', fill=True)
+                    pdf.cell(w_price, 8, 'Harga/Kg', border=1, align='R', fill=True)
+                    pdf.cell(w_total, 8, 'Total', border=1, align='R', fill=True)
+                    pdf.cell(w_fee, 8, 'Fee', border=1, align='R', fill=True)
+                    pdf.cell(w_net, 8, 'Diterima', border=1, ln=True, align='R', fill=True)
+
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.set_font('Helvetica', '', 10)
+                    for it in data['items']:
+                        pdf.cell(w_id, 8, str(it['id']), border=1, align='C')
+                        pdf.cell(w_cat, 8, it['category_name'][:24], border=1)
+                        pdf.cell(w_weight, 8, f"{it['weight_kg']:.2f} Kg", border=1, align='R')
+                        pdf.cell(w_price, 8, f"Rp {it['price_per_kg']:,.0f}", border=1, align='R')
+                        pdf.cell(w_total, 8, f"Rp {it['total_amount']:,.0f}", border=1, align='R')
+                        pdf.cell(w_fee, 8, f"Rp {it['committee_fee']:,.0f}", border=1, align='R')
+                        pdf.cell(w_net, 8, f"Rp {it['net_amount']:,.0f}", border=1, ln=True, align='R')
+
+                    pdf.set_fill_color(232, 245, 233)
+                    pdf.set_font('Helvetica', 'B', 10)
+                    pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Total Kotor', border=1, fill=True)
+                    pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_amount:,.0f}", border=1, ln=True, align='R', fill=True)
+                    pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Fee Panitia (10%)', border=1, fill=True)
+                    pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_fee:,.0f}", border=1, ln=True, align='R', fill=True)
+                    pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Diterima Warga', border=1, fill=True)
+                    pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_net:,.0f}", border=1, ln=True, align='R', fill=True)
+
+                    pdf.ln(6)
+                    pdf.set_font('Helvetica', 'B', 11)
+                    pdf.set_text_color(76, 175, 80)
+                    pdf.cell(0, 8, 'Go Green', ln=True)
+                    pdf.set_text_color(0, 0, 0)
+                    pdf.set_font('Helvetica', '', 9)
+                    pdf.multi_cell(0, 6, "Kurangi penggunaan kertas, simpan nota ini secara digital.")
+
+                    pdf_data_hist = pdf.output(dest="S").encode("latin-1")
+
+                    st.download_button(
+                        label="⬇️ Download Nota (PDF)",
+                        data=pdf_data_hist,
+                        file_name=f"nota_{batch_key}.pdf",
+                        mime="application/pdf",
+                        type="primary",
+                        help="Unduh nota transaksi ini",
+                    )
+        else:
+            st.info("Belum ada data transaksi untuk ditampilkan.")
+
+    with tab_cat:
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            st.markdown("### Daftar Kategori")
+            categories = get_all_categories()
+
+            if categories:
+                df_categories = pd.DataFrame(
+                    [
+                        (c['id'], c['name'], f"Rp {c['price_per_kg']:,.0f}", c['updated_at'])
+                        for c in categories
+                    ],
+                    columns=['ID', 'Nama Kategori', 'Harga/Kg', 'Update Terakhir'],
+                )
+                st.dataframe(df_categories, use_container_width=True, hide_index=True)
+
+                st.markdown("### Update Harga")
+                col_a, col_b, col_c = st.columns([2, 1, 1])
+
+                with col_a:
+                    category_options = {c['name']: c['id'] for c in categories}
+                    selected_category = st.selectbox("Pilih Kategori", list(category_options.keys()))
+
+                with col_b:
+                    new_price = st.number_input(
+                        "💰 Harga Baru (Rp/Kg)", min_value=0, step=100, help="Masukkan harga baru per kilogram"
+                    )
+
+                with col_c:
+                    st.write("")
+                    st.write("")
+                    if st.button("💾 Update Harga", use_container_width=True, type="primary"):
+                        if new_price > 0:
+                            category_id = category_options[selected_category]
+                            update_category_price(category_id, new_price)
+                            log_audit(
+                                st.session_state['user']['id'],
+                                'UPDATE_PRICE',
+                                f"Updated price for {selected_category} to Rp {new_price}",
+                            )
+                            st.success(
+                                f"✅ Harga {selected_category} berhasil diupdate menjadi Rp {new_price:,.0f}/Kg!"
+                            )
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.warning("⚠️ Harga harus lebih dari 0!")
+
+                st.markdown("### Hapus Kategori")
+                del_col1, del_col2 = st.columns([2, 1])
+
+                with del_col1:
+                    delete_map = {f"{c['name']} (Rp {c['price_per_kg']:,.0f}/Kg)": c['id'] for c in categories}
+                    selected_delete = st.selectbox("Pilih Kategori", list(delete_map.keys()))
+
+                with del_col2:
+                    st.write("")
+                    st.write("")
+                    if st.button("🗑️ Hapus Kategori", use_container_width=True):
+                        del_id = delete_map[selected_delete]
+                        success, message = delete_category(del_id)
+                        if success:
+                            log_audit(
+                                st.session_state['user']['id'], 'DELETE_CATEGORY', f"Deleted category ID {del_id}"
+                            )
+                            st.success("✅ Kategori berhasil dihapus")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ Gagal hapus: {message}")
+            else:
+                st.info("📝 Belum ada kategori sampah. Silakan tambah kategori baru terlebih dahulu.")
+
+        with col2:
+            st.markdown("### Tambah Kategori Baru")
+
+            with st.form("add_category_form_panitia"):
+                new_category_name = st.text_input("Nama Kategori")
+                new_category_price = st.number_input("Harga/Kg (Rp)", min_value=0, step=100)
+
+                submitted = st.form_submit_button("Tambah Kategori", use_container_width=True)
+
+                if submitted:
+                    if new_category_name and new_category_price > 0:
+                        success, message = create_category(new_category_name, new_category_price)
+                        if success:
+                            log_audit(
+                                st.session_state['user']['id'], 'CREATE_CATEGORY', f"Created category {new_category_name}"
+                            )
+                            st.success(message)
+                            st.rerun()
+                        else:
+                            st.error(f"Gagal menambah kategori: {message}")
+                    else:
+                        st.warning("Silakan isi semua field!")
+
+        st.markdown("---")
+        st.subheader("🕑 Riwayat Harga Berdasarkan Transaksi")
+
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            SELECT DISTINCT c.name, t.price_per_kg, DATE(t.transaction_date) as date
+            FROM transactions t
+            JOIN categories c ON t.category_id = c.id
+            ORDER BY t.transaction_date DESC
+            LIMIT 50
+        '''
+        )
+        price_history = cursor.fetchall()
+        conn.close()
+
+        if price_history:
+            df_history = pd.DataFrame(
+                [(h['name'], f"Rp {h['price_per_kg']:,.0f}", h['date']) for h in price_history],
+                columns=['Kategori', 'Harga/Kg', 'Tanggal'],
+            )
+            st.dataframe(df_history, use_container_width=True, hide_index=True)
+        else:
+            st.info("Belum ada riwayat transaksi untuk menampilkan harga.")
     
     with tab2:
-        st.subheader("Kelola Keuangan Warga")
         
         col1, col2 = st.columns(2)
         
@@ -1000,7 +1553,7 @@ def dashboard_panitia():
             st.info("Belum ada riwayat keuangan")
     
     with tab3:
-        st.markdown('<div class="info-card">', unsafe_allow_html=True)
+        
         st.subheader("👥 Kelola Data Warga")
         st.markdown('</div>', unsafe_allow_html=True)
         
@@ -1138,13 +1691,22 @@ def dashboard_panitia():
         all_warga = get_all_users('warga')
         
         if all_warga:
-                        df_warga = pd.DataFrame(
-                                [(w['id'], w['username'], w['full_name'], w.get('nickname') or '-',
-                                    f"RT {w.get('rt') or '-'} / RW {w.get('rw') or '-'}",
-                                    w.get('whatsapp') or '-', f"Rp {w['balance']:,.0f}",
-                                    'Aktif' if w['active'] else 'Non-Aktif') for w in all_warga],
-                                columns=['ID', 'Username', 'Nama Lengkap', 'Panggilan', 'RT/RW', 'WhatsApp', 'Saldo', 'Status']
-                        )
+            df_warga = pd.DataFrame(
+                [
+                    (
+                        w['id'],
+                        w['username'],
+                        w['full_name'],
+                        w.get('nickname') or '-',
+                        f"RT {w.get('rt') or '-'} / RW {w.get('rw') or '-'}",
+                        w.get('whatsapp') or '-',
+                        f"Rp {w['balance']:,.0f}",
+                        'Aktif' if w['active'] else 'Non-Aktif',
+                    )
+                    for w in all_warga
+                ],
+                columns=['ID', 'Username', 'Nama Lengkap', 'Panggilan', 'RT/RW', 'WhatsApp', 'Saldo', 'Status'],
+            )
             st.dataframe(df_warga, use_container_width=True, hide_index=True)
         else:
             st.markdown(
@@ -1314,8 +1876,6 @@ def dashboard_panitia():
             st.info("Belum ada transaksi")
     
     with tab6:
-        st.subheader("Pendapatan Panitia")
-        
         col1, col2 = st.columns([1, 2])
         
         with col1:
@@ -1355,6 +1915,72 @@ def dashboard_panitia():
             else:
                 st.info("Tidak ada pendapatan pada periode ini")
 
+    with tab7:
+        st.subheader("⚙️ Pengaturan Akun Panitia")
+        user_id = st.session_state['user']['id']
+        user_info = get_user_by_id(user_id)
+
+        col_profile, col_password = st.columns(2)
+
+        with col_profile:
+            st.markdown("### 🪪 Ubah Profil")
+            with st.form("panitia_update_profile_form"):
+                full_name = st.text_input("Nama Lengkap", value=user_info['full_name'] or "")
+                nickname = st.text_input("Nama Panggilan", value=user_info['nickname'] or "")
+                address = st.text_area("Alamat", value=user_info['address'] or "", height=80)
+                rt = st.text_input("RT", value=user_info['rt'] or "")
+                rw = st.text_input("RW", value=user_info['rw'] or "")
+                whatsapp = st.text_input("No. WhatsApp", value=user_info['whatsapp'] or "")
+
+                submitted_profile = st.form_submit_button("Simpan Profil", use_container_width=True)
+
+                if submitted_profile:
+                    if not full_name.strip():
+                        st.error("❌ Nama lengkap tidak boleh kosong")
+                    else:
+                        success, msg = update_user(
+                            user_id,
+                            full_name.strip(),
+                            nickname.strip(),
+                            address.strip(),
+                            rt.strip(),
+                            rw.strip(),
+                            whatsapp.strip(),
+                        )
+                        if success:
+                            st.session_state['user']['full_name'] = full_name.strip()
+                            log_audit(user_id, 'UPDATE_PROFILE', 'Panitia memperbarui profil sendiri')
+                            st.success("✅ Profil berhasil diperbarui")
+                        else:
+                            st.error(f"❌ Gagal memperbarui profil: {msg}")
+
+        with col_password:
+            st.markdown("### 🔒 Ubah Password")
+            with st.form("panitia_change_password_form"):
+                current_password = st.text_input("Password Saat Ini", type="password")
+                new_password = st.text_input("Password Baru", type="password", help="Minimal 6 karakter")
+                confirm_password = st.text_input("Konfirmasi Password Baru", type="password")
+
+                submitted_password = st.form_submit_button("Simpan Password", use_container_width=True)
+
+                if submitted_password:
+                    if not current_password or not new_password or not confirm_password:
+                        st.warning("⚠️ Semua field password wajib diisi")
+                    elif len(new_password) < 6:
+                        st.error("❌ Password baru minimal 6 karakter")
+                    elif new_password != confirm_password:
+                        st.error("❌ Konfirmasi password tidak sesuai")
+                    elif current_password == new_password:
+                        st.warning("⚠️ Password baru tidak boleh sama dengan password lama")
+                    else:
+                        auth_check = authenticate_user(st.session_state['user']['username'], current_password)
+                        if not auth_check:
+                            st.error("❌ Password saat ini salah")
+                        else:
+                            update_user_password(user_id, new_password)
+                            log_audit(user_id, 'CHANGE_PASSWORD', 'Panitia mengganti password sendiri')
+                            st.success("✅ Password berhasil diubah")
+
 def dashboard_warga():
     """Dashboard for Warga (Resident) role"""
     # Header
@@ -1387,7 +2013,7 @@ def dashboard_warga():
     
     st.markdown("<br>", unsafe_allow_html=True)
     
-    tab1, tab2, tab3 = st.tabs(["📊 Performa Saya", "📋 Riwayat Transaksi", "💳 Riwayat Keuangan"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📊 Performa Saya", "📋 Riwayat Transaksi", "💳 Riwayat Keuangan", "⚙️ Pengaturan Akun"])
     
     with tab1:
         st.markdown('<div class="svg-card">', unsafe_allow_html=True)
@@ -1446,7 +2072,7 @@ def dashboard_warga():
         
         # Category breakdown
         st.markdown("<br>", unsafe_allow_html=True)
-        st.markdown('<div class="info-card">', unsafe_allow_html=True)
+        
         st.markdown("### 📊 Breakdown per Kategori")
         
         conn = get_connection()
@@ -1485,7 +2111,7 @@ def dashboard_warga():
         st.markdown('</div>', unsafe_allow_html=True)
     
     with tab2:
-        st.markdown('<div class="info-card">', unsafe_allow_html=True)
+        
         st.subheader("📋 Riwayat Transaksi Penjualan Sampah")
         
         transactions = get_transactions(warga_id=user_id, limit=50)
@@ -1513,7 +2139,7 @@ def dashboard_warga():
         st.markdown('</div>', unsafe_allow_html=True)
     
     with tab3:
-        st.markdown('<div class="info-card">', unsafe_allow_html=True)
+        
         st.subheader("💳 Riwayat Penarikan & Deposit")
         
         movements = get_financial_movements(warga_id=user_id, limit=50)
@@ -1544,6 +2170,71 @@ def dashboard_warga():
         
         st.markdown('</div>', unsafe_allow_html=True)
 
+    with tab4:
+        st.subheader("⚙️ Pengaturan Akun")
+        user_info = get_user_by_id(user_id)
+
+        col_profile, col_password = st.columns(2)
+
+        with col_profile:
+            st.markdown("### 🪪 Ubah Profil")
+            with st.form("update_profile_form"):
+                full_name = st.text_input("Nama Lengkap", value=user_info['full_name'] or "")
+                nickname = st.text_input("Nama Panggilan", value=user_info['nickname'] or "")
+                address = st.text_area("Alamat", value=user_info['address'] or "", height=80)
+                rt = st.text_input("RT", value=user_info['rt'] or "")
+                rw = st.text_input("RW", value=user_info['rw'] or "")
+                whatsapp = st.text_input("No. WhatsApp", value=user_info['whatsapp'] or "")
+
+                submitted_profile = st.form_submit_button("Simpan Profil", use_container_width=True)
+
+                if submitted_profile:
+                    if not full_name.strip():
+                        st.error("❌ Nama lengkap tidak boleh kosong")
+                    else:
+                        success, msg = update_user(
+                            user_id,
+                            full_name.strip(),
+                            nickname.strip(),
+                            address.strip(),
+                            rt.strip(),
+                            rw.strip(),
+                            whatsapp.strip(),
+                        )
+                        if success:
+                            st.session_state['user']['full_name'] = full_name.strip()
+                            log_audit(user_id, 'UPDATE_PROFILE', 'Warga memperbarui profil sendiri')
+                            st.success("✅ Profil berhasil diperbarui")
+                        else:
+                            st.error(f"❌ Gagal memperbarui profil: {msg}")
+
+        with col_password:
+            st.markdown("### 🔒 Ubah Password")
+            with st.form("change_password_form"):
+                current_password = st.text_input("Password Saat Ini", type="password")
+                new_password = st.text_input("Password Baru", type="password", help="Minimal 6 karakter")
+                confirm_password = st.text_input("Konfirmasi Password Baru", type="password")
+
+                submitted_password = st.form_submit_button("Simpan Password", use_container_width=True)
+
+                if submitted_password:
+                    if not current_password or not new_password or not confirm_password:
+                        st.warning("⚠️ Semua field password wajib diisi")
+                    elif len(new_password) < 6:
+                        st.error("❌ Password baru minimal 6 karakter")
+                    elif new_password != confirm_password:
+                        st.error("❌ Konfirmasi password tidak sesuai")
+                    elif current_password == new_password:
+                        st.warning("⚠️ Password baru tidak boleh sama dengan password lama")
+                    else:
+                        auth_check = authenticate_user(st.session_state['user']['username'], current_password)
+                        if not auth_check:
+                            st.error("❌ Password saat ini salah")
+                        else:
+                            update_user_password(user_id, new_password)
+                            log_audit(user_id, 'CHANGE_PASSWORD', 'Warga mengganti password sendiri')
+                            st.success("✅ Password berhasil diubah")
+
 def dashboard_superuser():
     """Dashboard for Super User role"""
     # Header
@@ -1554,7 +2245,7 @@ def dashboard_superuser():
     </div>
     """, unsafe_allow_html=True)
     
-    tab1, tab2, tab3, tab4 = st.tabs(["👥 Kelola User", "🔐 Login Sebagai User Lain", "📜 Audit Log", "📊 Statistik Global"])
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(["👥 Kelola User", "🔐 Login Sebagai User Lain", "🧪 Data Dummy", "📜 Audit Log", "📊 Statistik Global"])
     
     with tab1:
         st.subheader("Kelola Pengguna")
@@ -1644,6 +2335,32 @@ def dashboard_superuser():
             st.warning("Tidak ada user lain")
     
     with tab3:
+        st.subheader("🧪 Data Dummy Demo")
+        st.info(
+            "Aktifkan data dummy untuk demo cepat: akan menambah user demo, beberapa transaksi, penarikan/deposit, dan kategori pelengkap. Nonaktifkan untuk menghapus data demo tanpa menyentuh data asli.")
+
+        dummy_active = get_setting('dummy_data_active', '0') == '1'
+
+        if dummy_active:
+            st.success("Data dummy sedang AKTIF")
+            if st.button("❌ Nonaktifkan & Hapus Data Dummy", use_container_width=True):
+                ok, msg = clear_dummy_data(st.session_state['user']['id'])
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+        else:
+            st.warning("Data dummy saat ini NONAKTIF")
+            if st.button("▶️ Aktifkan Data Dummy", use_container_width=True):
+                ok, msg = seed_dummy_data(st.session_state['user']['id'])
+                if ok:
+                    st.success(msg)
+                    st.rerun()
+                else:
+                    st.error(msg)
+
+    with tab4:
         st.subheader("Audit Log")
         
         col1, col2 = st.columns([1, 3])
@@ -1675,7 +2392,7 @@ def dashboard_superuser():
             else:
                 st.info("Tidak ada log")
     
-    with tab4:
+    with tab5:
         st.subheader("Statistik Global")
         
         # Overall statistics

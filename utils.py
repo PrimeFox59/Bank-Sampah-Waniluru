@@ -62,8 +62,8 @@ def delete_category(category_id):
         conn.close()
         return False, str(e)
 
-def create_transaction(warga_id, category_id, weight_kg, processed_by, notes=""):
-    """Create a new transaction"""
+def create_transaction(warga_id, category_id, weight_kg, processed_by, notes="", batch_id="", transaction_date=None):
+    """Create a new transaction (supports batch_id for multi-item grouping and custom date)."""
     conn = get_connection()
     cursor = conn.cursor()
     
@@ -82,13 +82,16 @@ def create_transaction(warga_id, category_id, weight_kg, processed_by, notes="")
     current_balance = cursor.fetchone()[0]
     
     # Insert transaction
+    if transaction_date is None:
+        transaction_date = datetime.now()
+
     cursor.execute('''
-        INSERT INTO transactions 
-        (warga_id, category_id, weight_kg, price_per_kg, total_amount, 
-         committee_fee, net_amount, processed_by, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    ''', (warga_id, category_id, weight_kg, price_per_kg, total_amount,
-          committee_fee, net_amount, processed_by, notes))
+                INSERT INTO transactions 
+                (warga_id, category_id, weight_kg, price_per_kg, total_amount, 
+                 committee_fee, net_amount, processed_by, batch_id, notes, transaction_date)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (warga_id, category_id, weight_kg, price_per_kg, total_amount,
+                    committee_fee, net_amount, processed_by, batch_id, notes, transaction_date))
     
     transaction_id = cursor.lastrowid
     
