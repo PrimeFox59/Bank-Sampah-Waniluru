@@ -4,7 +4,7 @@ Aplikasi manajemen Bank Sampah berbasis Streamlit dan SQLite dengan 4 role pengg
 
 ## ✨ Fitur Baru Update Terbaru
 
-### 🆕 Manajemen Warga Lengkap (Panitia)
+### 🆕 Manajemen Warga Lengkap (Admin)
 - ✅ **Tambah Warga Baru** dengan identitas lengkap (NIK, Nama, Alamat, Telepon)
 - ✅ **Edit Data Warga** untuk update informasi
 - ✅ **Hapus Warga** dengan validasi saldo (harus Rp 0)
@@ -40,7 +40,7 @@ Aplikasi manajemen Bank Sampah berbasis Streamlit dan SQLite dengan 4 role pengg
    - Set dan update harga per kategori (Rp/Kg)
    - Lihat riwayat perubahan harga
 
-3. **Panitia (Committee)**
+3. **Admin (Committee)**
    - Input transaksi penjualan sampah warga
    - **➕ Tambah warga baru** dengan data lengkap (NIK, alamat, telepon)
    - **✏️ Edit data warga** yang sudah terdaftar
@@ -65,11 +65,11 @@ Aplikasi manajemen Bank Sampah berbasis Streamlit dan SQLite dengan 4 role pengg
 - ✅ Kategori barang fleksibel
 - ✅ Update harga sewaktu-waktu
 - ✅ Sistem deposit (uang tidak diambil langsung)
-- ✅ Fee panitia otomatis 10%
+- ✅ Fee admin otomatis 10%
 - ✅ Pembukuan otomatis
 - ✅ Laporan bulanan & tahunan
 - ✅ Monitoring performa warga
-- ✅ **CRUD User oleh Panitia** (Tambah, Edit, Hapus)
+- ✅ **CRUD User oleh Admin** (Tambah, Edit, Hapus)
 - ✅ **Identitas lengkap warga** (NIK, Alamat, Telepon)
 - ✅ **Validasi input** (NIK 16 digit, password min 6 karakter)
 
@@ -93,7 +93,7 @@ streamlit run app.py
 |-------------|--------------|-----------|------------------|----------------------------------|--------------|
 | superuser   | admin123     | Super User| -                | -                                | -            |
 | pengepul1   | pengepul123  | Pengepul  | 3201234567890001 | Jl. Raya Pengepul No. 123        | 081234567890 |
-| panitia1    | panitia123   | Panitia   | 3201234567890002 | Jl. Panitia Indah No. 45         | 081234567891 |
+| panitia1    | panitia123   | Admin     | 3201234567890002 | Jl. Admin Indah No. 45           | 081234567891 |
 | warga1      | warga123     | Warga     | 3201234567890003 | Jl. Warga Sejahtera No. 10       | 081234567892 |
 | warga2      | warga123     | Warga     | 3201234567890004 | Jl. Mawar Melati No. 25          | 081234567893 |
 
@@ -117,14 +117,14 @@ streamlit run app.py
 - **categories** - Kategori sampah & harga
 - **transactions** - Transaksi penjualan sampah
 - **financial_movements** - Deposit & withdrawal
-- **committee_earnings** - Pendapatan panitia
+- **committee_earnings** - Pendapatan admin
 - **audit_log** - Log aktivitas sistem (termasuk create/update/delete user)
 - **active_sessions** - Session super user
 
-## Cara Panitia Mengelola Warga
+## Cara Admin Mengelola Warga
 
 ### ➕ Tambah Warga Baru
-1. Login sebagai Panitia
+1. Login sebagai Admin
 2. Pilih tab "👥 Kelola Warga"
 3. Klik sub-tab "➕ Tambah Warga"
 4. Isi form:
@@ -134,7 +134,7 @@ streamlit run app.py
    - **NIK (exactly 16 digit)** ← Validasi otomatis
    - **Alamat Lengkap**
    - **No. Telepon**
-   - Role (warga/panitia)
+   - Role (warga/admin)
 5. Klik "➕ Tambah Warga"
 6. ✅ User baru berhasil dibuat!
 
@@ -155,12 +155,12 @@ streamlit run app.py
 ## Flow Transaksi
 
 1. Warga membawa sampah ke bank sampah
-2. Panitia menimbang dan input transaksi
+2. Admin menimbang dan input transaksi
 3. Sistem otomatis:
    - Hitung total: berat × harga
-   - Potong fee panitia 10%
+   - Potong fee admin 10%
    - Tambah saldo warga (90%)
-   - Catat pendapatan panitia
+   - Catat pendapatan admin
    - Log ke audit
 4. Warga bisa:
    - Tarik saldo (withdrawal)

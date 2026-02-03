@@ -41,7 +41,7 @@ def migrate_database():
     print("\nUpdating default users with sample NIK and address...")
     updates = [
         ('3201234567890001', 'Jl. Raya Pengepul No. 123, Jakarta', '081234567890', 'pengepul1'),
-        ('3201234567890002', 'Jl. Panitia Indah No. 45, Jakarta', '081234567891', 'panitia1'),
+        ('3201234567890002', 'Jl. Admin Indah No. 45, Jakarta', '081234567891', 'panitia1'),
         ('3201234567890003', 'Jl. Warga Sejahtera No. 10, Jakarta', '081234567892', 'warga1'),
         ('3201234567890004', 'Jl. Mawar Melati No. 25, Jakarta', '081234567893', 'warga2'),
     ]

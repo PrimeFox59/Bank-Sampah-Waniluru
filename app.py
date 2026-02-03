@@ -282,7 +282,7 @@ st.markdown("""
         color: white;
     }
     
-    .role-panitia {
+    .role-admin, .role-panitia {
         background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
         color: white;
     }
@@ -413,6 +413,38 @@ if 'user' not in st.session_state:
     st.session_state['user'] = None
 
 
+def _display_role_label(role: str, uppercase: bool = False) -> str:
+    """Return human-friendly role label while keeping stored values stable."""
+    label_map = {
+        'superuser': 'Super User',
+        'panitia': 'Admin',  # legacy stored value
+        'admin': 'Admin',
+        'warga': 'Warga',
+    }
+    label = label_map.get(role, role.title())
+    return label.upper() if uppercase else label
+
+
+def _role_badge_class(role: str) -> str:
+    """Map role to CSS badge class with admin alias for panitia."""
+    return {
+        'superuser': 'role-superuser',
+        'panitia': 'role-admin',
+        'admin': 'role-admin',
+        'warga': 'role-warga',
+    }.get(role, 'role-warga')
+
+
+def _role_icon(role: str) -> str:
+    """Return role emoji icon with admin alias for panitia."""
+    return {
+        'superuser': '⚡',
+        'panitia': '📊',
+        'admin': '📊',
+        'warga': '👤',
+    }.get(role, '👤')
+
+
 def _ensure_user(username, password, full_name, nickname, address, rt, rw, whatsapp, role):
     """Get or create a user and return (success, user_id or message)."""
     conn = get_connection()
@@ -428,18 +460,18 @@ def _ensure_user(username, password, full_name, nickname, address, rt, rw, whats
 
 
 def seed_dummy_data(superuser_id):
-    """Populate richer demo data: 50 warga, 100 transaksi (2025-2026), plus a panitia handler."""
+    """Populate richer demo data: 50 warga, 100 transaksi (2025-2026), plus an admin handler."""
 
     random.seed(42)
 
     # Build dummy users
     dummy_users = [
         {
-            'username': 'demo_panitia',
+            'username': 'demo_admin',
             'password': 'demo123',
-            'full_name': 'Panitia Demo',
+            'full_name': 'Admin Demo',
             'nickname': 'Pak Demo',
-            'address': 'Jl. Contoh Panitia No. 8',
+            'address': 'Jl. Contoh Admin No. 8',
             'rt': '01',
             'rw': '02',
             'whatsapp': '081234560001',
@@ -472,7 +504,7 @@ def seed_dummy_data(superuser_id):
             return False, f"Gagal menambahkan user {du['username']}: {res}"
         user_ids[du['username']] = res
 
-    panitia_id = user_ids['demo_panitia']
+    panitia_id = user_ids['demo_admin']
     warga_ids = [user_ids[k] for k in user_ids if k.startswith('demo_warga')]
 
     # Ensure categories exist and have variety
@@ -555,7 +587,7 @@ def clear_dummy_data(superuser_id):
     # Remove dummy users last to avoid FK issues
     cursor.execute(
         "DELETE FROM users WHERE username = ? OR username LIKE ?",
-        ('demo_panitia', 'demo_warga%'),
+        ('demo_admin', 'demo_warga%'),
     )
 
     conn.commit()
@@ -636,7 +668,7 @@ def login_page():
                 
             with col_b:
                 st.info("""
-                **🔵 Panitia**  
+                **🔵 Admin**  
                 Username: `panitia1`  
                 Password: `panitia123`  
                 *Input transaksi & keuangan*
@@ -862,7 +894,7 @@ def dashboard_pengepul():
             st.info("Belum ada data transaksi")
     
     with tab4:
-        st.subheader("Riwayat Transaksi dari Panitia")
+        st.subheader("Riwayat Transaksi dari Admin")
         
         # Date filter
         col1, col2, col3 = st.columns([1, 1, 2])
@@ -1056,7 +1088,7 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     narrative = (
         f"Pada periode {start_label} s.d. {end_label}, tercatat {total_transactions} transaksi dari {warga_unique} warga. "
         f"Total berat sampah tercatat {total_weight:.2f} kg dengan nilai bruto Rp {total_revenue:,.0f}. "
-        f"Panitia menerima fee Rp {total_fee:,.0f}, sementara warga menerima bersih Rp {total_net:,.0f}. "
+        f"Admin menerima fee Rp {total_fee:,.0f}, sementara warga menerima bersih Rp {total_net:,.0f}. "
         f"Rata-rata nilai per transaksi adalah Rp {avg_value:,.0f}, dan rata-rata nilai per hari Rp {avg_per_day:,.0f} (dari {day_count} hari aktif). "
         f"Kategori dengan kontribusi terbesar: {top_cat_text} (total {category_count} kategori tercatat). "
         f"Hari tersibuk: {busiest_day_text}. Warga dengan nilai transaksi terbesar: {top_warga_text}."
@@ -1072,7 +1104,7 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     pdf.cell(0, 8, f"Periode: {start_label} s.d. {end_label}", ln=True)
     pdf.cell(0, 8, f"Total transaksi: {total_transactions} | Warga unik: {warga_unique}", ln=True)
     pdf.cell(0, 8, f"Total berat: {total_weight:.2f} Kg", ln=True)
-    pdf.cell(0, 8, f"Revenue: Rp {total_revenue:,.0f} | Fee panitia: Rp {total_fee:,.0f}", ln=True)
+    pdf.cell(0, 8, f"Revenue: Rp {total_revenue:,.0f} | Fee admin: Rp {total_fee:,.0f}", ln=True)
     pdf.cell(0, 8, f"Pendapatan warga (net): Rp {total_net:,.0f}", ln=True)
     pdf.cell(0, 8, f"Rata-rata per transaksi: Rp {avg_value:,.0f}", ln=True)
     pdf.ln(2)
@@ -1121,11 +1153,11 @@ def generate_pdf_laporan(transactions, start_date, end_date):
 
 
 def dashboard_panitia():
-    """Dashboard for Panitia (Committee) role"""
+    """Dashboard for Admin (legacy panitia role)."""
     # Header
     st.markdown("""
     <div class="main-header">
-        <h1>📊 Dashboard Panitia</h1>
+        <h1>📊 Dashboard Admin</h1>
         <p>Input transaksi, kelola keuangan warga, dan buat laporan lengkap</p>
     </div>
     """, unsafe_allow_html=True)
@@ -1147,7 +1179,7 @@ def dashboard_panitia():
                 1. Pilih nama warga yang menjual sampah<br>
                 2. Pilih kategori sampah (harga otomatis muncul)<br>
                 3. Timbang dan masukkan berat dalam Kg<br>
-                4. Sistem akan otomatis hitung: Total, Fee Panitia (10%), dan Saldo Warga
+                4. Sistem akan otomatis hitung: Total, Fee Admin (10%), dan Saldo Warga
             </div>
             """, unsafe_allow_html=True)
             
@@ -1235,7 +1267,7 @@ def dashboard_panitia():
                         <div style="background: #E3F2FD; padding: 1rem; border-radius: 8px; margin: 1rem 0;">
                             <p style="margin: 0; color: #0D47A1; font-weight: 600;">💡 Preview Multi-Item:</p>
                             <p style="margin: 0.3rem 0; color: #1E88E5;">Total Kotor: <strong>Rp {total_preview:,.0f}</strong></p>
-                            <p style="margin: 0.3rem 0; color: #1E88E5;">Fee Panitia (10%): <strong>Rp {total_fee_preview:,.0f}</strong></p>
+                            <p style="margin: 0.3rem 0; color: #1E88E5;">Fee Admin (10%): <strong>Rp {total_fee_preview:,.0f}</strong></p>
                             <p style="margin: 0.3rem 0; color: #0D47A1; font-size: 1.1rem;">Warga Terima: <strong>Rp {total_net_preview:,.0f}</strong></p>
                         </div>
                         """, unsafe_allow_html=True)
@@ -1304,7 +1336,7 @@ def dashboard_panitia():
                             st.markdown(f"""
                             <table style="width: 100%; color: #1B5E20;">
                                 <tr><td><strong>Total Kotor:</strong></td><td style="text-align: right;"><strong>Rp {total_amount:,.0f}</strong></td></tr>
-                                <tr><td>Fee Panitia (10%):</td><td style="text-align: right;">Rp {total_fee:,.0f}</td></tr>
+                                <tr><td>Fee Admin (10%):</td><td style="text-align: right;">Rp {total_fee:,.0f}</td></tr>
                                 <tr style="border-top: 2px solid #4CAF50;"><td><strong>Diterima Warga:</strong></td><td style="text-align: right; font-size: 1.2rem;"><strong>Rp {total_net:,.0f}</strong></td></tr>
                             </table>
                             """, unsafe_allow_html=True)
@@ -1369,7 +1401,7 @@ def dashboard_panitia():
                             pdf.set_font('Helvetica', 'B', 10)
                             pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Total Kotor', border=1, fill=True)
                             pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_amount:,.0f}", border=1, ln=True, align='R', fill=True)
-                            pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Fee Panitia (10%)', border=1, fill=True)
+                            pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Fee Admin (10%)', border=1, fill=True)
                             pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_fee:,.0f}", border=1, ln=True, align='R', fill=True)
                             pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Diterima Warga', border=1, fill=True)
                             pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_net:,.0f}", border=1, ln=True, align='R', fill=True)
@@ -1530,7 +1562,7 @@ def dashboard_panitia():
                         pdf.set_font('Helvetica', 'B', 10)
                         pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Total Kotor', border=1, fill=True)
                         pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_amount:,.0f}", border=1, ln=True, align='R', fill=True)
-                        pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Fee Panitia (10%)', border=1, fill=True)
+                        pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Fee Admin (10%)', border=1, fill=True)
                         pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_fee:,.0f}", border=1, ln=True, align='R', fill=True)
                         pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Diterima Warga', border=1, fill=True)
                         pdf.cell(w_total + w_fee + w_net, 8, f"Rp {total_net:,.0f}", border=1, ln=True, align='R', fill=True)
@@ -1679,7 +1711,7 @@ def dashboard_panitia():
             st.info("Belum ada riwayat transaksi untuk menampilkan harga.")
     
     with tab_keu:
-        keu_tab_manage, keu_tab_income = st.tabs(["Kelola Keuangan", "Pendapatan Panitia"])
+        keu_tab_manage, keu_tab_income = st.tabs(["Kelola Keuangan", "Pendapatan Admin"])
 
         with keu_tab_manage:
             st.subheader("Kelola Keuangan Warga")
@@ -1766,7 +1798,7 @@ def dashboard_panitia():
                 st.info("Belum ada riwayat keuangan")
 
         with keu_tab_income:
-            st.subheader("Pendapatan Panitia")
+            st.subheader("Pendapatan Admin")
             col1, col2 = st.columns([1, 2])
             
             with col1:
@@ -1776,7 +1808,7 @@ def dashboard_panitia():
                 
                 total_earnings = get_committee_total_earnings(start_date_comm, end_date_comm)
                 
-                st.metric("Total Pendapatan Panitia", f"Rp {total_earnings:,.0f}")
+                st.metric("Total Pendapatan Admin", f"Rp {total_earnings:,.0f}")
             
             with col2:
                 st.markdown("### Detail Pendapatan")
@@ -1806,7 +1838,7 @@ def dashboard_panitia():
                     st.info("Tidak ada pendapatan pada periode ini")
     
     with tab_users:
-        user_tab_manage, user_tab_settings = st.tabs(["👥 Kelola Warga", "⚙️ Pengaturan Akun Panitia"])
+        user_tab_manage, user_tab_settings = st.tabs(["👥 Kelola Warga", "⚙️ Pengaturan Akun Admin"])
 
         with user_tab_manage:
             st.subheader("👥 Kelola Data Warga")
@@ -1832,7 +1864,13 @@ def dashboard_panitia():
                         new_rt = st.text_input("🏘️ RT", help="RT tempat tinggal")
                         new_rw = st.text_input("🏘️ RW", help="RW tempat tinggal")
                         new_whatsapp = st.text_input("📱 No. WhatsApp", help="Nomor WA yang aktif")
-                        new_role = st.selectbox("👔 Role", ["warga", "panitia"], help="Pilih role untuk user baru")
+                        role_options = ["warga", "panitia"]
+                        new_role = st.selectbox(
+                            "👔 Role",
+                            role_options,
+                            format_func=lambda r: "Admin" if r == "panitia" else r.capitalize(),
+                            help="Pilih role untuk user baru",
+                        )
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     submitted = st.form_submit_button("➕ Tambah Warga", use_container_width=True, type="primary")
@@ -1976,7 +2014,7 @@ def dashboard_panitia():
                 )
 
         with user_tab_settings:
-            st.subheader("⚙️ Pengaturan Akun Panitia")
+            st.subheader("⚙️ Pengaturan Akun Admin")
             user_id = st.session_state['user']['id']
             user_info = get_user_by_id(user_id)
 
@@ -2009,7 +2047,7 @@ def dashboard_panitia():
                             )
                             if success:
                                 st.session_state['user']['full_name'] = full_name.strip()
-                                log_audit(user_id, 'UPDATE_PROFILE', 'Panitia memperbarui profil sendiri')
+                                log_audit(user_id, 'UPDATE_PROFILE', 'Admin memperbarui profil sendiri')
                                 st.success("✅ Profil berhasil diperbarui")
                             else:
                                 st.error(f"❌ Gagal memperbarui profil: {msg}")
@@ -2038,7 +2076,7 @@ def dashboard_panitia():
                                 st.error("❌ Password saat ini salah")
                             else:
                                 update_user_password(user_id, new_password)
-                                log_audit(user_id, 'CHANGE_PASSWORD', 'Panitia mengganti password sendiri')
+                                log_audit(user_id, 'CHANGE_PASSWORD', 'Admin mengganti password sendiri')
                                 st.success("✅ Password berhasil diubah")
     
     with tab_laporan:
@@ -2117,7 +2155,7 @@ def dashboard_panitia():
                             st.metric("Total Revenue", f"Rp {stats['total_revenue']:,.0f}")
                         
                         with metric_col4:
-                            st.metric("Pendapatan Panitia", f"Rp {committee_earnings:,.0f}")
+                            st.metric("Pendapatan Admin", f"Rp {committee_earnings:,.0f}")
                 
                 else:  # Tahunan
                     year = st.number_input("Tahun", min_value=2020, max_value=2030, value=datetime.now().year, key="year_annual")
@@ -2143,7 +2181,7 @@ def dashboard_panitia():
                             st.metric("Total Revenue", f"Rp {stats['total_revenue']:,.0f}")
                         
                         with metric_col4:
-                            st.metric("Pendapatan Panitia", f"Rp {committee_earnings:,.0f}")
+                            st.metric("Pendapatan Admin", f"Rp {committee_earnings:,.0f}")
             
             with col2:
                 st.markdown("### Riwayat Transaksi")
@@ -2162,7 +2200,7 @@ def dashboard_panitia():
                         [(t['warga_name'], t['category_name'], t['weight_kg'],
                           f"Rp {t['total_amount']:,.0f}", f"Rp {t['committee_fee']:,.0f}",
                           f"Rp {t['net_amount']:,.0f}", t['transaction_date']) for t in transactions],
-                        columns=['Warga', 'Kategori', 'Berat (Kg)', 'Total', 'Fee Panitia', 'Diterima Warga', 'Tanggal']
+                        columns=['Warga', 'Kategori', 'Berat (Kg)', 'Total', 'Fee Admin', 'Diterima Warga', 'Tanggal']
                     )
                     st.dataframe(df_trans, use_container_width=True, hide_index=True)
                     
@@ -2170,7 +2208,7 @@ def dashboard_panitia():
                     total_revenue = sum(t['total_amount'] for t in transactions)
                     total_fee = sum(t['committee_fee'] for t in transactions)
                     
-                    st.info(f"**Total Revenue:** Rp {total_revenue:,.0f} | **Total Fee Panitia:** Rp {total_fee:,.0f}")
+                    st.info(f"**Total Revenue:** Rp {total_revenue:,.0f} | **Total Fee Admin:** Rp {total_fee:,.0f}")
                 else:
                     st.info("Tidak ada transaksi pada periode ini")
 
@@ -2262,7 +2300,7 @@ def dashboard_warga():
         <div class="metric-card" style="font-size: 1.2rem; margin: 0; text-align: left;">
             <p style="margin: 0; font-size: 1rem; color: #90CAF9;">💰 SALDO ANDA SAAT INI</p>
             <h2 style="margin: 0.5rem 0; font-size: 3rem; color: #0D47A1;">Rp {balance:,.0f}</h2>
-            <p style="margin: 0; font-size: 0.9rem; color: #1E88E5;">✓ Dapat ditarik kapan saja melalui Panitia</p>
+            <p style="margin: 0; font-size: 0.9rem; color: #1E88E5;">✓ Dapat ditarik kapan saja melalui Admin</p>
         </div>
         """, unsafe_allow_html=True)
     
@@ -2530,7 +2568,12 @@ def dashboard_superuser():
                 new_username = st.text_input("Username")
                 new_password = st.text_input("Password", type="password")
                 new_full_name = st.text_input("Nama Lengkap")
-                new_role = st.selectbox("Role", ["warga", "panitia", "superuser"])
+                role_options = ["warga", "panitia", "superuser"]
+                new_role = st.selectbox(
+                    "Role",
+                    role_options,
+                    format_func=lambda r: "Admin" if r == "panitia" else ("Super User" if r == "superuser" else r.capitalize()),
+                )
                 
                 submitted = st.form_submit_button("Tambah User", use_container_width=True)
                 
@@ -2694,7 +2737,7 @@ def dashboard_superuser():
             st.metric("Total Revenue", f"Rp {total_revenue:,.0f}")
         
         with col4:
-            st.metric("Pendapatan Panitia", f"Rp {total_committee:,.0f}")
+            st.metric("Pendapatan Admin", f"Rp {total_committee:,.0f}")
         
         st.markdown("---")
         
@@ -2755,17 +2798,6 @@ def main():
         
         # User info
         user = st.session_state['user']
-        role_colors = {
-            'superuser': 'role-superuser',
-            'panitia': 'role-panitia',
-            'warga': 'role-warga'
-        }
-        role_icons = {
-            'superuser': '⚡',
-            'panitia': '📊',
-            'warga': '👤'
-        }
-        
         # Show superuser banner if applicable
         if check_superuser_session():
             st.markdown("""
@@ -2781,9 +2813,9 @@ def main():
             st.markdown(f"""
             <div class="info-card">
                 <div style="text-align: center;">
-                    <h2 style="margin: 0; color: #0D47A1; font-size: 1.3rem;">{role_icons.get(user['role'], '👤')} {user['full_name']}</h2>
-                    <span class="role-badge {role_colors.get(user['role'], 'role-warga')}" style="margin-top: 0.5rem;">
-                        {user['role'].upper()}
+                    <h2 style="margin: 0; color: #0D47A1; font-size: 1.3rem;">{_role_icon(user['role'])} {user['full_name']}</h2>
+                    <span class="role-badge {_role_badge_class(user['role'])}" style="margin-top: 0.5rem;">
+                        {_display_role_label(user['role'], uppercase=True)}
                     </span>
                 </div>
             </div>
@@ -2815,7 +2847,7 @@ def main():
                 """)
             elif user['role'] == 'panitia':
                 st.markdown("""
-                **Panitia dapat:**
+                **Admin dapat:**
                 - ✅ Input transaksi sampah
                 - ✅ Kelola keuangan warga
                 - ✅ Buat laporan
@@ -2855,13 +2887,17 @@ def main():
     if role == 'superuser':
         dashboard_superuser()
     elif role == 'pengepul':
-        st.info("Role pengepul telah digabung ke panitia. Mengarahkan ke dashboard panitia.")
+        st.info("Role pengepul telah digabung ke admin. Mengarahkan ke dashboard admin.")
         dashboard_panitia()
     elif role == 'panitia':
         dashboard_panitia()
     elif role == 'warga':
         dashboard_warga()
     else:
+        st.error("Role tidak dikenali!")
+
+if __name__ == '__main__':
+    main()
         st.error("Role tidak dikenali!")
 
 if __name__ == '__main__':

@@ -12,9 +12,9 @@
 - ✅ Semua default users sekarang memiliki NIK, alamat, dan telepon
 - ✅ NIK menggunakan format: 3201234567890001-004
 
-### 2. 👥 Manajemen Warga oleh Panitia
+### 2. 👥 Manajemen Warga oleh Admin
 
-**Tab Baru di Dashboard Panitia:**
+**Tab Baru di Dashboard Admin:**
 - ✅ Tab "👥 Kelola Warga" ditambahkan sebagai tab ke-3
 - ✅ Total 6 tabs: Input Transaksi, Kelola Keuangan, **Kelola Warga**, Laporan, Performa, Pendapatan
 
@@ -29,7 +29,7 @@
   - NIK (wajib, exactly 16 digit)
   - Alamat Lengkap
   - No. Telepon
-  - Role (dropdown: warga/panitia)
+  - Role (dropdown: warga/Admin)
 - Validasi:
   - ✅ Password minimal 6 karakter
   - ✅ NIK harus 16 digit
@@ -108,7 +108,7 @@ Test Results:
 
 3. **app.py**
    - Added imports: create_user, update_user, delete_user
-   - Changed Panitia dashboard from 5 to 6 tabs
+   - Changed Admin dashboard from 5 to 6 tabs
    - Implemented complete user management UI in tab3
    - Added 3 sub-tabs: Tambah, Edit, Hapus
    - Added warga list display
@@ -150,9 +150,9 @@ python migrate_db.py  # Add NIK, address, phone to existing DB
 streamlit run app.py
 ```
 
-3. **Login as Panitia:**
-- Username: `panitia1`
-- Password: `panitia123`
+3. **Login as Admin:**
+- Username: `Admin1`
+- Password: `Admin123`
 
 4. **Navigate to:**
 Dashboard → Tab "👥 Kelola Warga" → Sub-tabs (Tambah/Edit/Hapus)
@@ -162,9 +162,9 @@ Dashboard → Tab "👥 Kelola Warga" → Sub-tabs (Tambah/Edit/Hapus)
 - ✅ NIK field (16 digit, validated)
 - ✅ Alamat lengkap field
 - ✅ No. telepon field
-- ✅ Panitia can ADD user
-- ✅ Panitia can EDIT user
-- ✅ Panitia can DELETE user (with validation)
+- ✅ Admin can ADD user
+- ✅ Admin can EDIT user
+- ✅ Admin can DELETE user (with validation)
 - ✅ View all registered warga
 - ✅ Audit logging for all user operations
 - ✅ Form validation (password, NIK, etc)
@@ -181,7 +181,7 @@ CREATE TABLE users (
     username TEXT UNIQUE NOT NULL,
     password TEXT NOT NULL,
     full_name TEXT NOT NULL,
-    role TEXT NOT NULL CHECK(role IN ('superuser', 'pengepul', 'panitia', 'warga')),
+    role TEXT NOT NULL CHECK(role IN ('superuser', 'pengepul', 'Admin', 'warga')),
     nik TEXT DEFAULT '',          -- BARU!
     address TEXT DEFAULT '',      -- BARU!
     phone TEXT DEFAULT '',        -- BARU!
@@ -195,7 +195,7 @@ CREATE TABLE users (
 
 Aplikasi Bank Sampah sekarang memiliki:
 1. ✅ Identitas warga yang lengkap (NIK, alamat, telepon)
-2. ✅ Fitur CRUD user lengkap untuk Panitia
+2. ✅ Fitur CRUD user lengkap untuk Admin
 3. ✅ Validasi input yang ketat
 4. ✅ UI/UX yang mudah digunakan
 5. ✅ Audit trail lengkap

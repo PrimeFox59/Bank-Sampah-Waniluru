@@ -32,7 +32,7 @@ def init_database():
             rt TEXT,
             rw TEXT,
             whatsapp TEXT,
-            role TEXT NOT NULL CHECK(role IN ('superuser', 'panitia', 'warga')),
+            role TEXT NOT NULL CHECK(role IN ('superuser', 'panitia', 'admin', 'warga')),
             balance REAL DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             active INTEGER DEFAULT 1
@@ -161,7 +161,7 @@ def create_default_users():
     
     default_users = [
         ('superuser', 'admin123', 'Super Administrator', '', 'Jalan Super Admin 1', '', '', '081234567800', 'superuser'),
-        ('panitia1', 'panitia123', 'Panitia Koordinator', 'Koordinator', 'Jl. Panitia Indah No. 45, Jakarta', '01', '02', '081234567891', 'panitia'),
+        ('panitia1', 'panitia123', 'Admin Koordinator', 'Koordinator', 'Jl. Admin Utama No. 45, Jakarta', '01', '02', '081234567891', 'panitia'),
         ('warga1', 'warga123', 'Warga Contoh 1', 'Mas Warga', 'Jl. Warga Sejahtera No. 10, Jakarta', '03', '04', '081234567892', 'warga'),
         ('warga2', 'warga123', 'Warga Contoh 2', 'Mbak Warga', 'Jl. Mawar Melati No. 25, Jakarta', '03', '05', '081234567893', 'warga'),
     ]

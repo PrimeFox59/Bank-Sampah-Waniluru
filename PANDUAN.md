@@ -10,7 +10,7 @@ Akses aplikasi di: http://localhost:8503
 |------|----------|----------|-------|
 | Super User | superuser | admin123 | Semua fitur |
 | Pengepul | pengepul1 | pengepul123 | Kelola harga & kategori |
-| Panitia | panitia1 | panitia123 | Transaksi & keuangan |
+| Admin | Admin1 | Admin123 | Transaksi & keuangan |
 | Warga | warga1 | warga123 | Lihat saldo & performa |
 
 ---
@@ -37,7 +37,7 @@ Akses aplikasi di: http://localhost:8503
 
 ---
 
-## 📊 Panitia - Koordinasi & Keuangan
+## 📊 Admin - Koordinasi & Keuangan
 
 ### 1. Input Transaksi Sampah
 
@@ -50,16 +50,16 @@ Akses aplikasi di: http://localhost:8503
 
 **Sistem Otomatis:**
 - Hitung total: berat × harga/Kg
-- Potong fee panitia 10%
+- Potong fee Admin 10%
 - Tambah saldo warga 90%
-- Catat pendapatan panitia
+- Catat pendapatan Admin
 - Update balance
 
 **Contoh:**
 - Plastik Botol: Rp 3,000/Kg
 - Berat: 5 Kg
 - Total: Rp 15,000
-- Fee Panitia: Rp 1,500 (10%)
+- Fee Admin: Rp 1,500 (10%)
 - Warga terima: Rp 13,500
 
 ### 2. Kelola Keuangan Warga
@@ -78,7 +78,7 @@ Akses aplikasi di: http://localhost:8503
 
 **Bulanan:**
 - Pilih tahun & bulan
-- Lihat total transaksi, berat, revenue, fee panitia
+- Lihat total transaksi, berat, revenue, fee Admin
 
 **Tahunan:**
 - Pilih tahun
@@ -98,7 +98,7 @@ Akses aplikasi di: http://localhost:8503
   - Total pendapatan
   - Saldo saat ini
 
-### 5. Pendapatan Panitia
+### 5. Pendapatan Admin
 
 - Filter berdasarkan periode
 - Lihat total fee 10%
@@ -157,7 +157,7 @@ Akses aplikasi di: http://localhost:8503
 4. **Statistik Global**
    - Total transaksi sistem
    - Total berat & revenue
-   - Pendapatan panitia total
+   - Pendapatan Admin total
    - User per role
    - Top 5 warga teraktif
 
@@ -172,16 +172,16 @@ Akses aplikasi di: http://localhost:8503
    Warga datang dengan plastik botol 5 Kg
    ```
 
-2. **Panitia timbang & input**
+2. **Admin timbang & input**
    ```
-   Panitia login → Input Transaksi
+   Admin login → Input Transaksi
    Pilih warga → Plastik Botol → 5 Kg
    ```
 
 3. **Sistem proses otomatis**
    ```
    Total: 5 × Rp 3,000 = Rp 15,000
-   Fee Panitia 10%: Rp 1,500
+   Fee Admin 10%: Rp 1,500
    Warga terima: Rp 13,500
    Saldo warga bertambah Rp 13,500
    ```
@@ -194,7 +194,7 @@ Akses aplikasi di: http://localhost:8503
 5. **Warga tarik uang** (opsional)
    ```
    Warga minta tarik Rp 10,000
-   Panitia proses penarikan
+   Admin proses penarikan
    Warga terima uang tunai
    Saldo tersisa Rp 3,500
    ```
@@ -206,7 +206,7 @@ Akses aplikasi di: http://localhost:8503
    Warga: "Saya mau simpan dulu, nanti diambil"
    ```
 
-2. **Panitia proses deposit**
+2. **Admin proses deposit**
    ```
    Tidak ada penarikan
    Saldo tetap di sistem
@@ -217,7 +217,7 @@ Akses aplikasi di: http://localhost:8503
 
 ## 📈 Monitoring & Laporan
 
-### Untuk Panitia:
+### Untuk Admin:
 
 **Harian:**
 - Cek transaksi hari ini
@@ -225,7 +225,7 @@ Akses aplikasi di: http://localhost:8503
 
 **Bulanan:**
 - Generate laporan bulanan
-- Pendapatan panitia
+- Pendapatan Admin
 - Performa warga
 
 **Tahunan:**
@@ -270,13 +270,13 @@ Akses aplikasi di: http://localhost:8503
 A: Login sebagai Pengepul → Tab "Kelola Kategori" → Pilih kategori → Update harga
 
 **Q: Apakah warga harus langsung tarik uang?**
-A: Tidak, bisa disimpan (deposit). Panitia koordinasi keuangan warga.
+A: Tidak, bisa disimpan (deposit). Admin koordinasi keuangan warga.
 
-**Q: Berapa fee panitia?**
+**Q: Berapa fee Admin?**
 A: 10% dari setiap transaksi, otomatis terpotong.
 
-**Q: Bagaimana cara lihat pendapatan panitia?**
-A: Login Panitia → Tab "Pendapatan Panitia" → Filter periode
+**Q: Bagaimana cara lihat pendapatan Admin?**
+A: Login Admin → Tab "Pendapatan Admin" → Filter periode
 
 **Q: Bisa tambah kategori sampah baru?**
 A: Ya, Pengepul bisa tambah kategori kapan saja.

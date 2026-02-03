@@ -1,11 +1,11 @@
-# 📖 Panduan Penggunaan - Kelola Warga (Panitia)
+# 📖 Panduan Penggunaan - Kelola Warga (Admin)
 
-## 🔐 Login sebagai Panitia
+## 🔐 Login sebagai Admin
 
 1. Buka aplikasi: http://localhost:8503
 2. Login dengan:
-   - Username: `panitia1`
-   - Password: `panitia123`
+   - Username: `Admin1`
+   - Password: `Admin123`
 
 ## 👥 Mengakses Kelola Warga
 
@@ -15,7 +15,7 @@ Setelah login, Anda akan melihat dashboard dengan 6 tabs:
 3. **👥 Kelola Warga** ← KLIK DI SINI
 4. 📑 Laporan
 5. 📈 Performa Warga
-6. 💵 Pendapatan Panitia
+6. 💵 Pendapatan Admin
 
 ## ➕ Menambah Warga Baru
 
@@ -34,7 +34,7 @@ Setelah login, Anda akan melihat dashboard dengan 6 tabs:
    **Kolom Kanan:**
    - 🏠 Alamat Lengkap: `[alamat sesuai KTP]`
    - 📱 No. Telepon: `[HP/WA aktif]`
-   - 👔 Role: `[pilih: warga atau panitia]`
+   - 👔 Role: `[pilih: warga atau Admin]`
 
 4. Klik tombol "➕ Tambah Warga" (biru, full width)
 5. ✅ Jika berhasil, akan muncul pesan sukses + balloons 🎈
@@ -149,7 +149,7 @@ Super User bisa melihat semua audit log di dashboardnya.
 - **Solusi:** Tarik dulu saldo warga di tab Kelola Keuangan → Penarikan
 
 ### Tidak melihat tab "Kelola Warga"
-- **Solusi:** Pastikan Anda login sebagai **Panitia** atau **Super User**, bukan Warga atau Pengepul
+- **Solusi:** Pastikan Anda login sebagai **Admin** atau **Super User**, bukan Warga atau Pengepul
 
 ## 📞 Support
 

@@ -26,7 +26,7 @@
 - ✅ User card dengan role badge berwarna:
   - 🟣 Super User: Ungu
   - 🟠 Pengepul: Orange
-  - 🔵 Panitia: Biru
+  - 🔵 Admin: Biru
   - 🟢 Warga: Hijau
 - ✅ Quick stats untuk warga (saldo langsung terlihat)
 - ✅ Expandable panduan cepat per role
@@ -40,7 +40,7 @@
 
 ### 4. **Form Input yang User-Friendly**
 
-#### Input Transaksi (Panitia):
+#### Input Transaksi (Admin):
 - ✅ Help text dengan instruksi step-by-step
 - ✅ Icon untuk setiap field
 - ✅ **Preview perhitungan real-time** - User langsung tahu berapa yang akan dibayar
@@ -156,7 +156,7 @@ Header: linear-gradient(135deg, #1E88E5 0%, #0D47A1 100%)
 Badge: Orange gradient
 ```
 
-### Panitia (Biru)
+### Admin (Biru)
 ```css
 Header: linear-gradient(135deg, #1E88E5 0%, #0D47A1 100%)
 Badge: Blue gradient
@@ -212,7 +212,7 @@ Saldo Card: Blue gradient
 
 ## 🎯 User Flow Examples
 
-### Warga Input Sampah (via Panitia):
+### Warga Input Sampah (via Admin):
 1. 👀 Lihat preview harga langsung di dropdown
 2. ⚖️ Input berat → Langsung lihat preview total
 3. 🚀 Klik tombol → Loading spinner
