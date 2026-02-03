@@ -282,6 +282,11 @@ st.markdown("""
         color: white;
     }
     
+    .role-inputer {
+        background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+        color: white;
+    }
+
     .role-admin, .role-panitia {
         background: linear-gradient(135deg, #1E88E5 0%, #1565C0 100%);
         color: white;
@@ -417,6 +422,7 @@ def _display_role_label(role: str, uppercase: bool = False) -> str:
     """Return human-friendly role label while keeping stored values stable."""
     label_map = {
         'superuser': 'Super User',
+        'inputer': 'Panitia',
         'panitia': 'Admin',  # legacy stored value
         'admin': 'Admin',
         'warga': 'Warga',
@@ -429,6 +435,7 @@ def _role_badge_class(role: str) -> str:
     """Map role to CSS badge class with admin alias for panitia."""
     return {
         'superuser': 'role-superuser',
+        'inputer': 'role-inputer',
         'panitia': 'role-admin',
         'admin': 'role-admin',
         'warga': 'role-warga',
@@ -439,6 +446,7 @@ def _role_icon(role: str) -> str:
     """Return role emoji icon with admin alias for panitia."""
     return {
         'superuser': '⚡',
+        'inputer': '📝',
         'panitia': '📊',
         'admin': '📊',
         'warga': '👤',
@@ -1152,27 +1160,14 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     return pdf_buffer
 
 
-def dashboard_panitia():
-    """Dashboard for Admin (legacy panitia role)."""
-    # Header
-    st.markdown("""
-    <div class="main-header">
-        <h1>📊 Dashboard Admin</h1>
-        <p>Input transaksi, kelola keuangan warga, dan buat laporan lengkap</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    tab_transaksi, tab_cat, tab_keu, tab_users, tab_laporan = st.tabs([
-        "🔀 Transaksi", "♻️ Kategori & Harga", "💰 Keuangan", "👥 Manage User", "📑 Laporan"
-    ])
-    
+def _render_admin_tab_transaksi(tab_transaksi):
+    """Shared transaksi tab for admin-like roles (admin, panitia)."""
     with tab_transaksi:
         trans_tab_input, trans_tab_history = st.tabs(["➕ Input Transaksi", "📜 History Transaksi"])
 
         with trans_tab_input:
             st.subheader("➕ Input Transaksi Penjualan Sampah")
-            
-            # Help text
+
             st.markdown("""
             <div class="help-text">
                 <strong>📝 Cara Input Transaksi:</strong><br>
@@ -1182,11 +1177,11 @@ def dashboard_panitia():
                 4. Sistem akan otomatis hitung: Total, Fee Admin (10%), dan Saldo Warga
             </div>
             """, unsafe_allow_html=True)
-            
+
             st.markdown('</div>', unsafe_allow_html=True)
-            
+
             col1, col2 = st.columns([2, 1])
-            
+
             with col1:
                 if 'item_count' not in st.session_state:
                     st.session_state['item_count'] = 1
@@ -1213,15 +1208,13 @@ def dashboard_panitia():
 
                 with st.form("transaction_form"):
                     st.markdown("### 📝 Form Input Transaksi")
-                    
-                    # Get warga list
+
                     warga_list = get_all_users('warga')
                     warga_options = {f"👤 {w['full_name']} ({w['username']})": w['id'] for w in warga_list}
-                    
+
                     selected_warga = st.selectbox("👤 Pilih Warga", list(warga_options.keys()), 
                                                   help="Pilih warga yang menjual sampah")
-                    
-                    # Get categories
+
                     categories = get_all_categories()
                     category_options = {f"♻️ {c['name']} - Rp {c['price_per_kg']:,.0f}/Kg": c for c in categories}
 
@@ -1274,10 +1267,10 @@ def dashboard_panitia():
 
                     notes = st.text_area("📌 Catatan (Opsional)", 
                                         help="Tambahkan catatan jika diperlukan, misal: kondisi sampah, dll")
-                    
+
                     st.markdown("<br>", unsafe_allow_html=True)
                     submitted = st.form_submit_button("🚀 Proses Transaksi Sekarang", use_container_width=True, type="primary")
-                    
+
                     if submitted:
                         invalid = [item for item in items if item['weight'] <= 0]
                         if invalid:
@@ -1314,7 +1307,6 @@ def dashboard_panitia():
                             st.success("✅ Transaksi multi-item berhasil diproses!")
                             st.balloons()
 
-                            # Detail display per item
                             st.markdown(
                                 "<div class=\"info-card\" style=\"background: #E8F5E9; border-color: #4CAF50;\">",
                                 unsafe_allow_html=True,
@@ -1342,7 +1334,6 @@ def dashboard_panitia():
                             """, unsafe_allow_html=True)
                             st.markdown("</div>", unsafe_allow_html=True)
 
-                            # PDF receipt
                             warga_detail = get_user_by_id(warga_id)
                             warga_name = warga_detail['full_name'] if warga_detail else "-"
                             processor = st.session_state['user']['full_name']
@@ -1372,7 +1363,6 @@ def dashboard_panitia():
                                 pdf.multi_cell(0, 8, f"Catatan: {notes}")
                             pdf.ln(4)
 
-                            # Table header with green fill (widths sum to 190)
                             w_id, w_cat, w_weight, w_price, w_total, w_fee, w_net = 12, 55, 22, 28, 28, 22, 23
                             pdf.set_fill_color(76, 175, 80)
                             pdf.set_text_color(255, 255, 255)
@@ -1396,7 +1386,6 @@ def dashboard_panitia():
                                 pdf.cell(w_fee, 8, f"Rp {row['fee']:,.0f}", border=1, align='R')
                                 pdf.cell(w_net, 8, f"Rp {row['net']:,.0f}", border=1, ln=True, align='R')
 
-                            # Totals section
                             pdf.set_fill_color(232, 245, 233)
                             pdf.set_font('Helvetica', 'B', 10)
                             pdf.cell(w_id + w_cat + w_weight + w_price, 8, 'Total Kotor', border=1, fill=True)
@@ -1421,7 +1410,7 @@ def dashboard_panitia():
             with col2:
                 st.markdown("### 🕐 Transaksi Terakhir")
                 recent_transactions = get_transactions(limit=5)
-                
+
                 if recent_transactions:
                     for t in recent_transactions:
                         st.markdown(f"""
@@ -1444,7 +1433,6 @@ def dashboard_panitia():
                         unsafe_allow_html=True,
                     )
 
-            # Render download button outside the form if available
             if st.session_state.get('last_pdf_data'):
                 pdf_placeholder.download_button(
                     label="⬇️ Download Nota (PDF)",
@@ -1459,7 +1447,6 @@ def dashboard_panitia():
             st.subheader("📜 History Transaksi & Nota")
             st.markdown("Unduh nota PDF untuk transaksi yang sudah tercatat.")
 
-            # Filters
             filter_col1, filter_col2 = st.columns([2, 2])
 
             with filter_col1:
@@ -1534,7 +1521,6 @@ def dashboard_panitia():
                             pdf.multi_cell(0, 8, f"Catatan: {data['notes']}")
                         pdf.ln(4)
 
-                        # Tabel item
                         w_id, w_cat, w_weight, w_price, w_total, w_fee, w_net = 12, 55, 22, 28, 28, 22, 23
                         pdf.set_fill_color(76, 175, 80)
                         pdf.set_text_color(255, 255, 255)
@@ -1588,6 +1574,9 @@ def dashboard_panitia():
             else:
                 st.info("Belum ada data transaksi untuk ditampilkan.")
 
+
+def _render_admin_tab_categories(tab_cat):
+    """Shared kategori tab for admin-like roles (admin, panitia)."""
     with tab_cat:
         col1, col2 = st.columns([2, 1])
 
@@ -1709,6 +1698,24 @@ def dashboard_panitia():
             st.dataframe(df_history, use_container_width=True, hide_index=True)
         else:
             st.info("Belum ada riwayat transaksi untuk menampilkan harga.")
+
+
+def dashboard_panitia():
+    """Dashboard for Admin (legacy panitia role)."""
+    # Header
+    st.markdown("""
+    <div class="main-header">
+        <h1>📊 Dashboard Admin</h1>
+        <p>Input transaksi, kelola keuangan warga, dan buat laporan lengkap</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    tab_transaksi, tab_cat, tab_keu, tab_users, tab_laporan = st.tabs([
+        "🔀 Transaksi", "♻️ Kategori & Harga", "💰 Keuangan", "👥 Manage User", "📑 Laporan"
+    ])
+    
+    _render_admin_tab_transaksi(tab_transaksi)
+    _render_admin_tab_categories(tab_cat)
     
     with tab_keu:
         keu_tab_manage, keu_tab_income = st.tabs(["Kelola Keuangan", "Pendapatan Admin"])
@@ -1864,11 +1871,11 @@ def dashboard_panitia():
                         new_rt = st.text_input("🏘️ RT", help="RT tempat tinggal")
                         new_rw = st.text_input("🏘️ RW", help="RW tempat tinggal")
                         new_whatsapp = st.text_input("📱 No. WhatsApp", help="Nomor WA yang aktif")
-                        role_options = ["warga", "panitia"]
+                        role_options = ["warga", "panitia", "inputer"]
                         new_role = st.selectbox(
                             "👔 Role",
                             role_options,
-                            format_func=lambda r: "Admin" if r == "panitia" else r.capitalize(),
+                            format_func=lambda r: "Admin" if r == "panitia" else "Panitia" if r == "inputer" else r.capitalize(),
                             help="Pilih role untuk user baru",
                         )
                     
@@ -2273,7 +2280,91 @@ def dashboard_panitia():
                 st.dataframe(df_warga_trans, use_container_width=True, hide_index=True)
             else:
                 st.info("Belum ada transaksi")
-    
+
+
+def dashboard_inputer():
+    """Dashboard for Panitia role with limited admin access."""
+    st.markdown("""
+    <div class="main-header" style="background: linear-gradient(135deg, #FFB74D 0%, #FB8C00 100%);">
+        <h1>📝 Dashboard Panitia</h1>
+        <p>Input transaksi dan kelola kategori & harga</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    tab_transaksi, tab_cat, tab_settings = st.tabs([
+        "🔀 Transaksi", "♻️ Kategori & Harga", "⚙️ Pengaturan Akun"
+    ])
+
+    _render_admin_tab_transaksi(tab_transaksi)
+    _render_admin_tab_categories(tab_cat)
+
+    with tab_settings:
+        st.subheader("⚙️ Pengaturan Akun Panitia")
+        user_id = st.session_state['user']['id']
+        user_info = get_user_by_id(user_id)
+
+        col_profile, col_password = st.columns(2)
+
+        with col_profile:
+            st.markdown("### 🪪 Ubah Profil")
+            with st.form("inputer_update_profile_form"):
+                full_name = st.text_input("Nama Lengkap", value=user_info['full_name'] or "")
+                nickname = st.text_input("Nama Panggilan", value=user_info['nickname'] or "")
+                address = st.text_area("Alamat", value=user_info['address'] or "", height=80)
+                rt = st.text_input("RT", value=user_info['rt'] or "")
+                rw = st.text_input("RW", value=user_info['rw'] or "")
+                whatsapp = st.text_input("No. WhatsApp", value=user_info['whatsapp'] or "")
+
+                submitted_profile = st.form_submit_button("Simpan Profil", use_container_width=True)
+
+                if submitted_profile:
+                    if not full_name.strip():
+                        st.error("❌ Nama lengkap tidak boleh kosong")
+                    else:
+                        success, msg = update_user(
+                            user_id,
+                            full_name.strip(),
+                            nickname.strip(),
+                            address.strip(),
+                            rt.strip(),
+                            rw.strip(),
+                            whatsapp.strip(),
+                        )
+                        if success:
+                            st.session_state['user']['full_name'] = full_name.strip()
+                            log_audit(user_id, 'UPDATE_PROFILE', 'Panitia memperbarui profil sendiri')
+                            st.success("✅ Profil berhasil diperbarui")
+                        else:
+                            st.error(f"❌ Gagal memperbarui profil: {msg}")
+
+        with col_password:
+            st.markdown("### 🔒 Ubah Password")
+            with st.form("inputer_change_password_form"):
+                current_password = st.text_input("Password Saat Ini", type="password")
+                new_password = st.text_input("Password Baru", type="password", help="Minimal 6 karakter")
+                confirm_password = st.text_input("Konfirmasi Password Baru", type="password")
+
+                submitted_password = st.form_submit_button("Simpan Password", use_container_width=True)
+
+                if submitted_password:
+                    if not current_password or not new_password or not confirm_password:
+                        st.warning("⚠️ Semua field password wajib diisi")
+                    elif len(new_password) < 6:
+                        st.error("❌ Password baru minimal 6 karakter")
+                    elif new_password != confirm_password:
+                        st.error("❌ Konfirmasi password tidak sesuai")
+                    elif current_password == new_password:
+                        st.warning("⚠️ Password baru tidak boleh sama dengan password lama")
+                    else:
+                        auth_check = authenticate_user(st.session_state['user']['username'], current_password)
+                        if not auth_check:
+                            st.error("❌ Password saat ini salah")
+                        else:
+                            update_user_password(user_id, new_password)
+                            log_audit(user_id, 'CHANGE_PASSWORD', 'Panitia mengganti password sendiri')
+                            st.success("✅ Password berhasil diubah")
+
+
 def dashboard_warga():
     """Dashboard for Warga (Resident) role"""
     # Header
@@ -2568,11 +2659,13 @@ def dashboard_superuser():
                 new_username = st.text_input("Username")
                 new_password = st.text_input("Password", type="password")
                 new_full_name = st.text_input("Nama Lengkap")
-                role_options = ["warga", "panitia", "superuser"]
+                role_options = ["warga", "panitia", "inputer", "superuser"]
                 new_role = st.selectbox(
                     "Role",
                     role_options,
-                    format_func=lambda r: "Admin" if r == "panitia" else ("Super User" if r == "superuser" else r.capitalize()),
+                    format_func=lambda r: (
+                        "Admin" if r == "panitia" else "Panitia" if r == "inputer" else "Super User" if r == "superuser" else r.capitalize()
+                    ),
                 )
                 
                 submitted = st.form_submit_button("Tambah User", use_container_width=True)
@@ -2845,6 +2938,13 @@ def main():
                 - ✅ Lihat audit log
                 - ✅ Monitoring sistem
                 """)
+            elif user['role'] == 'inputer':
+                st.markdown("""
+                **Panitia dapat:**
+                - ✅ Input transaksi sampah
+                - ✅ Kelola kategori & harga
+                - ✅ Update akun sendiri
+                """)
             elif user['role'] == 'panitia':
                 st.markdown("""
                 **Admin dapat:**
@@ -2889,15 +2989,13 @@ def main():
     elif role == 'pengepul':
         st.info("Role pengepul telah digabung ke admin. Mengarahkan ke dashboard admin.")
         dashboard_panitia()
+    elif role == 'inputer':
+        dashboard_inputer()
     elif role == 'panitia':
         dashboard_panitia()
     elif role == 'warga':
         dashboard_warga()
     else:
-        st.error("Role tidak dikenali!")
-
-if __name__ == '__main__':
-    main()
         st.error("Role tidak dikenali!")
 
 if __name__ == '__main__':
