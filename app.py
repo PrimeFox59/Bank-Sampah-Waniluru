@@ -683,6 +683,13 @@ def login_page():
                 """)
                 
                 st.info("""
+                **🟠 Panitia**  
+                Username: `inputer1`  
+                Password: `inputer123`  
+                *Input transaksi & kelola kategori*
+                """)
+
+                st.info("""
                 **🟢 Warga**  
                 Username: `warga1`  
                 Password: `warga123`  
