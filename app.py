@@ -1187,7 +1187,7 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     pdf.set_font("Helvetica", "I", 9)
     pdf.cell(0, 5, f"Dicetak otomatis pada: {datetime.now().strftime('%d/%m/%Y %H:%M')}", align='R')
 
-    pdf_buffer = io.BytesIO(pdf.output(dest="S").encode("latin-1"))
+    pdf_buffer = io.BytesIO(pdf.output())
     pdf_buffer.seek(0)
     return pdf_buffer
 
@@ -1435,7 +1435,7 @@ def _render_admin_tab_transaksi(tab_transaksi):
                             pdf.set_font('Helvetica', '', 9)
                             pdf.multi_cell(0, 6, "Kurangi penggunaan kertas, simpan nota ini secara digital.")
 
-                            pdf_data = pdf.output(dest="S").encode("latin-1")
+                            pdf_data = pdf.output()
                             st.session_state['last_pdf_data'] = pdf_data
                             st.session_state['last_pdf_name'] = f"nota_{summary_rows[0]['id']}.pdf"
 
@@ -1593,7 +1593,7 @@ def _render_admin_tab_transaksi(tab_transaksi):
                         pdf.set_font('Helvetica', '', 9)
                         pdf.multi_cell(0, 6, "Kurangi penggunaan kertas, simpan nota ini secara digital.")
 
-                        pdf_data_hist = pdf.output(dest="S").encode("latin-1")
+                        pdf_data_hist = pdf.output()
 
                         st.download_button(
                             label="⬇️ Download Nota (PDF)",
