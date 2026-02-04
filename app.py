@@ -619,9 +619,7 @@ def login_page():
     # Login container
     col1, col2, col3 = st.columns([1, 2, 1])
     
-    with col2:
-        st.markdown('<div class="login-container">', unsafe_allow_html=True)
-        
+    with col2:      
         st.markdown('<h2 class="login-title">🔐 Masuk ke Sistem</h2>', unsafe_allow_html=True)
         
         username = st.text_input("👤 Username", placeholder="Masukkan username Anda")
