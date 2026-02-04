@@ -2037,18 +2037,6 @@ def _render_admin_tab_categories(tab_cat):
 
 def dashboard_panitia():
     """Dashboard for Admin (legacy panitia role)."""
-    # -----------------------------------------------------------
-    # ADDED: Sidebar Navigation for Admin Role
-    # -----------------------------------------------------------
-    if st.session_state['user']['role'] == 'panitia':
-        # Default empty to create sidebar section
-        st.sidebar.markdown("### Menu Navigasi")
-        menu = st.sidebar.radio("Pilih Menu", ["🏠 Dashboard", "📂 Manajemen Operasional"], index=0)
-        
-        if menu == "🏠 Dashboard":
-            dashboard_admin_home()
-            return
-
     # Header
     st.markdown("""
     <div class="main-header">
@@ -2057,9 +2045,12 @@ def dashboard_panitia():
     </div>
     """, unsafe_allow_html=True)
     
-    tab_transaksi, tab_cat, tab_keu, tab_users, tab_laporan = st.tabs([
-        "🔀 Transaksi", "♻️ Kategori & Harga", "💰 Keuangan", "👥 Manage User", "📑 Laporan"
+    tab_dashboard, tab_transaksi, tab_cat, tab_keu, tab_users, tab_laporan = st.tabs([
+        "🏠 Dashboard", "🔀 Transaksi", "♻️ Kategori & Harga", "💰 Keuangan", "👥 Manage User", "📑 Laporan"
     ])
+    
+    with tab_dashboard:
+        dashboard_admin_home()
     
     _render_admin_tab_transaksi(tab_transaksi)
     _render_admin_tab_categories(tab_cat)
