@@ -17,7 +17,7 @@ DUMMY_TAG = "[DUMMY DATA]"
 
 # Page configuration
 st.set_page_config(
-    page_title="Bank Sampah Wani Luru - Sistem Manajemen",
+    page_title="Bank Sampah Wani Luru RW 1 - Sistem Manajemen",
     page_icon="♻️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -758,7 +758,7 @@ def login_page():
     # Header
     st.markdown("""
     <div class="main-header" style="text-align: center;">
-        <h1>♻️ Bank Sampah Wani Luru</h1>
+        <h1>♻️ Bank Sampah Wani Luru RW 1</h1>
         <p>Sistem Manajemen Bank Sampah Digital</p>
     </div>
     """, unsafe_allow_html=True)
@@ -809,8 +809,8 @@ def login_page():
     st.markdown("---")
     st.markdown("""
     <div style="text-align: center; color: #1E88E5; font-size: 0.9rem;">
-        <p>💙 Bank Sampah Wani Luru - Untuk Lingkungan yang Lebih Bersih dan Sejahtera</p>
-        <p style="font-size: 0.8rem; color: #90CAF9;">© 2026 Bank Sampah Wani Luru Management System</p>
+        <p>💙 Bank Sampah Wani Luru RW 1 - Untuk Lingkungan yang Lebih Bersih dan Sejahtera</p>
+        <p style="font-size: 0.8rem; color: #90CAF9;">© 2026 Bank Sampah Wani Luru RW 1 Management System</p>
     </div>
     """, unsafe_allow_html=True)
 
@@ -1239,7 +1239,7 @@ def generate_pdf_laporan(transactions, start_date, end_date):
             if self.page_no() > 1:
                 self.set_font('Helvetica', 'I', 8)
                 self.set_text_color(128)
-                self.cell(0, 10, 'Bank Sampah Wani Luru - Laporan Kinerja Operasional', 0, 0, 'R')
+                self.cell(0, 10, 'Bank Sampah Wani Luru RW 1 - Laporan Kinerja Operasional', 0, 0, 'R')
                 self.ln(10)
         
         def footer(self):
@@ -1271,7 +1271,7 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     pdf.set_font("Helvetica", "", 12)
     pdf.cell(0, 8, "Disusun Oleh:", ln=True, align='C')
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Tim Pengelola Bank Sampah Wani Luru", ln=True, align='C')
+    pdf.cell(0, 8, "Tim Pengelola Bank Sampah Wani Luru RW 1", ln=True, align='C')
     pdf.ln(5)
     pdf.set_font("Helvetica", "", 12)
     pdf.cell(0, 8, f"Waniluru, {datetime.now().strftime('%d %B %Y')}", ln=True, align='C')
@@ -1285,13 +1285,13 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     pdf.set_font("Helvetica", "", 11)
     intro_text = (
         "Puji syukur kami panjatkan ke hadirat Tuhan Yang Maha Esa atas rahmat dan karunia-Nya, "
-        "sehingga kami dapat menyelesaikan Laporan Kinerja Operasional Bank Sampah Wani Luru ini dengan baik. "
+        "sehingga kami dapat menyelesaikan Laporan Kinerja Operasional Bank Sampah Wani Luru RW 1 ini dengan baik. "
         "Laporan ini disusun sebagai bentuk pertanggungjawaban dan transparansi pengelolaan bank sampah kepada "
         "seluruh warga dan pemangku kepentingan.\n\n"
         "Melalui laporan ini, kami menyajikan data dan analisis mengenai aktivitas pengelolaan sampah, "
         "termasuk volume sampah yang tereduksi, nilai ekonomi yang dihasilkan, serta partisipasi warga "
         "selama periode pelaporan. Kami berharap laporan ini dapat menjadi bahan evaluasi untuk meningkatkan "
-        "kinerja dan layanan Bank Sampah Wani Luru ke depannya.\n\n"
+        "kinerja dan layanan Bank Sampah Wani Luru RW 1 ke depannya.\n\n"
         "Terima kasih kami sampaikan kepada seluruh warga yang telah aktif berpartisipasi, serta semua pihak "
         "yang telah mendukung operasional bank sampah ini."
     )
@@ -1333,7 +1333,7 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     pdf.set_font("Helvetica", "", 11)
     latar_belakang = (
         "Permasalahan sampah merupakan isu lingkungan yang memerlukan perhatian serius dan penanganan "
-        "yang berkelanjutan. Bank Sampah Wani Luru hadir sebagai solusi berbasis masyarakat untuk "
+        "yang berkelanjutan. Bank Sampah Wani Luru RW 1 hadir sebagai solusi berbasis masyarakat untuk "
         "mengelola sampah secara mandiri, mengubah sampah menjadi sumber daya ekonomi, dan membangun "
         "kesadaran lingkungan di tengah masyarakat."
     )
@@ -1345,7 +1345,7 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     pdf.set_font("Helvetica", "", 11)
     tujuan = (
         "Laporan ini disusun dengan tujuan:\n"
-        "1. Memberikan gambaran kinerja operasional Bank Sampah Wani Luru.\n"
+        "1. Memberikan gambaran kinerja operasional Bank Sampah Wani Luru RW 1.\n"
         "2. Melaporkan data kuantitatif volume sampah dan nilai transaksi.\n"
         "3. Mengevaluasi tingkat partisipasi warga dalam program bank sampah.\n"
         "4. Sebagai bahan pertimbangan dalam pengambilan keputusan strategis."
@@ -1380,7 +1380,7 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     pdf.cell(0, 8, "2.2 Narasi Operasional", ln=True)
     pdf.set_font("Helvetica", "", 11)
     narasi_ops = (
-        f"Pada periode pelaporan ini, Bank Sampah Wani Luru telah berhasil memfasilitasi {total_transactions} transaksi "
+        f"Pada periode pelaporan ini, Bank Sampah Wani Luru RW 1 telah berhasil memfasilitasi {total_transactions} transaksi "
         f"penyetoran sampah. Hal ini menunjukkan antusiasme warga yang positif. Total nilai ekonomi yang berputar "
         f"mencapai Rp {total_revenue:,.0f}, dengan kontribusi pendapatan untuk operasional (fee) sebesar Rp {total_fee:,.0f}. "
         f"Sampah jenis {sorted(category_sales.items(), key=lambda x: x[1], reverse=True)[0][0] if category_sales else 'Umum'} "
@@ -1682,7 +1682,7 @@ def _render_admin_tab_transaksi(tab_transaksi):
                                     self.set_font('Helvetica', 'B', 14)
                                     self.cell(0, 10, 'Nota Transaksi Bank Sampah', ln=True, align='C')
                                     self.set_font('Helvetica', '', 10)
-                                    self.cell(0, 6, 'Bank Sampah Wani Luru', ln=True, align='C')
+                                    self.cell(0, 6, 'Bank Sampah Wani Luru RW 1', ln=True, align='C')
                                     self.ln(5)
                                     self.set_text_color(0, 0, 0)
 
@@ -1839,7 +1839,7 @@ def _render_admin_tab_transaksi(tab_transaksi):
                                 self.set_font('Helvetica', 'B', 14)
                                 self.cell(0, 10, 'Nota Transaksi Bank Sampah', ln=True, align='C')
                                 self.set_font('Helvetica', '', 10)
-                                self.cell(0, 6, 'Bank Sampah Wani Luru', ln=True, align='C')
+                                self.cell(0, 6, 'Bank Sampah Wani Luru RW 1', ln=True, align='C')
                                 self.ln(5)
                                 self.set_text_color(0, 0, 0)
 
@@ -3222,7 +3222,7 @@ def main():
         # Logo and title
         st.markdown("""
         <div style="text-align: center; padding: 1rem; background: linear-gradient(135deg, #1E88E5 0%, #0D47A1 100%); border-radius: 10px; margin-bottom: 1rem;">
-            <h1 style="color: white; margin: 0; font-size: 1.8rem;">♻️ Bank Sampah Wani Luru</h1>
+            <h1 style="color: white; margin: 0; font-size: 1.8rem;">♻️ Bank Sampah Wani Luru RW 1</h1>
             <p style="color: #E3F2FD; margin: 0.5rem 0 0 0; font-size: 0.9rem;">Sistem Manajemen Digital</p>
         </div>
         """, unsafe_allow_html=True)
@@ -3314,7 +3314,7 @@ def main():
         st.markdown("---")
         st.markdown("""
         <div style="text-align: center;">
-            <p style="font-size: 0.75rem; color: #1E88E5; margin: 0;">💙 Bank Sampah Wani Luru</p>
+            <p style="font-size: 0.75rem; color: #1E88E5; margin: 0;">💙 Bank Sampah Wani Luru RW 1</p>
             <p style="font-size: 0.7rem; color: #90CAF9; margin: 0.3rem 0 0 0;">© 2026 v1.0</p>
         </div>
         """, unsafe_allow_html=True)
