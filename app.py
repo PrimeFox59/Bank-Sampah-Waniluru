@@ -440,6 +440,115 @@ st.markdown("""
 # Initialize database
 initialize_system()
 
+def dashboard_admin_home():
+    """New specialized dashboard for Admin Home"""
+    st.subheader("📊 Dashboard Utama")
+    
+    # --- Top Cards ---
+    col1, col2, col3, col4 = st.columns(4)
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    # 1. Total Transactions (All time)
+    cursor.execute('SELECT COUNT(*) FROM transactions')
+    total_trans = cursor.fetchone()[0]
+    
+    # 2. Total Weight
+    cursor.execute('SELECT SUM(weight_kg) FROM transactions')
+    total_weight = cursor.fetchone()[0] or 0
+    
+    # 3. Total Revenue
+    cursor.execute('SELECT SUM(total_amount) FROM transactions')
+    total_rev = cursor.fetchone()[0] or 0
+    
+    # 4. Active Warga
+    cursor.execute('SELECT COUNT(DISTINCT warga_id) FROM transactions')
+    active_warga = cursor.fetchone()[0]
+    
+    conn.close()
+    
+    with col1:
+        ui_metric_card("Total Transaksi", total_trans, icon="🧾")
+    with col2:
+        ui_metric_card("Total Berat", f"{total_weight:,.2f} Kg", icon="⚖️")
+    with col3:
+        ui_metric_card("Total Omzet", f"Rp {total_rev:,.0f}", icon="💰")
+    with col4:
+        ui_metric_card("Warga Aktif", active_warga, icon="👥")
+        
+    st.markdown("---")
+    
+    # --- Charts ---
+    c1, c2 = st.columns([2, 1])
+    
+    with c1:
+        st.markdown("### 📈 Tren Transaksi Harian (30 Hari Terakhir)")
+        # Get daily transaction value
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=30)
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT date(transaction_date) as d, SUM(total_amount) as total
+            FROM transactions 
+            WHERE date(transaction_date) BETWEEN ? AND ?
+            GROUP BY date(transaction_date)
+            ORDER BY d
+        ''', (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+        daily_data = cursor.fetchall()
+        conn.close()
+        
+        if daily_data:
+            df_trend = pd.DataFrame(daily_data, columns=['Tanggal', 'Total'])
+            df_trend['Tanggal'] = pd.to_datetime(df_trend['Tanggal'])
+            st.line_chart(df_trend.set_index('Tanggal'), color="#1E88E5")
+        else:
+            st.info("Belum ada data transaksi 30 hari terakhir")
+
+    with c2:
+        st.markdown("### 🏆 Top 5 Warga Teraktif")
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT u.full_name, COUNT(*) as cnt
+            FROM transactions t
+            JOIN users u ON t.warga_id = u.id
+            GROUP BY t.warga_id
+            ORDER BY cnt DESC
+            LIMIT 5
+        ''')
+        top_warga = cursor.fetchall()
+        conn.close()
+        
+        if top_warga:
+            # Horizontal bar chart ref
+            df_top = pd.DataFrame(top_warga, columns=['Nama', 'Jumlah Transaksi'])
+            st.dataframe(df_top, use_container_width=True, hide_index=True)
+        else:
+            st.info("Belum ada data")
+
+    # Categories Pie/Bar
+    st.markdown("### ♻️ Komposisi Kategori Sampah (Berat)")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT c.name, SUM(t.weight_kg) as total_w
+        FROM transactions t
+        JOIN categories c ON t.category_id = c.id
+        GROUP BY t.category_id
+        ORDER BY total_w DESC
+        LIMIT 10
+    ''')
+    cat_stats = cursor.fetchall()
+    conn.close()
+    
+    if cat_stats:
+        df_cat = pd.DataFrame(cat_stats, columns=['Kategori', 'Total Berat (Kg)'])
+        st.bar_chart(df_cat.set_index('Kategori'), color="#4CAF50")
+
+
 def ui_metric_card(title, value, icon="📊", color="#1E88E5", help_text=None):
     """Render a premium metric card using HTML/CSS."""
     help_html = f'<div title="{help_text}" style="cursor:help; display:inline-block; margin-left:5px;">ℹ️</div>' if help_text else ""
@@ -1386,10 +1495,23 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     return pdf_buffer
 
 
-def _render_admin_tab_transaksi(tab_transaksi):
-    """Shared transaksi tab for admin-like roles (admin, panitia)."""
-    with tab_transaksi:
-        trans_tab_input, trans_tab_history = st.tabs(["➕ Input Transaksi", "📜 History Transaksi"])
+def dashboard_panitia():
+    """Dashboard for Panitia (Admin)"""
+    # Sidebar Navigation for Admin
+    if st.session_state['user']['role'] == 'panitia': # 'panitia' represents 'Admin' role in this app
+        menu = st.sidebar.radio("Menu Admin", ["Dashboard", "Manajemen Operasional"], index=0)
+        
+        if menu == "Dashboard":
+            dashboard_admin_home()
+            return
+            
+    st.title("🛠️ Dashboard Manajemen (Admin)")
+
+    tab_transaksi, tab_laporan, tab_cat, tab_warga, tab_keu, tab_settings = st.tabs([
+        "🛒 Transaksi", "📊 Laporan", "♻️ Kategori", "👥 Warga", "💰 Keuangan", "⚙️ Pengaturan"
+    ])
+    
+    _render_admin_tab_transaksi(tab_transaksi)
 
         with trans_tab_input:
             st.subheader("➕ Input Transaksi Penjualan Sampah")
@@ -1928,10 +2050,22 @@ def _render_admin_tab_categories(tab_cat):
 
 def dashboard_panitia():
     """Dashboard for Admin (legacy panitia role)."""
+    # -----------------------------------------------------------
+    # ADDED: Sidebar Navigation for Admin Role
+    # -----------------------------------------------------------
+    if st.session_state['user']['role'] == 'panitia':
+        # Default empty to create sidebar section
+        st.sidebar.markdown("### Menu Navigasi")
+        menu = st.sidebar.radio("Pilih Menu", ["🏠 Dashboard", "📂 Manajemen Operasional"], index=0)
+        
+        if menu == "🏠 Dashboard":
+            dashboard_admin_home()
+            return
+
     # Header
     st.markdown("""
     <div class="main-header">
-        <h1>📊 Dashboard Admin</h1>
+        <h1>📊 Dashboard Manajemen</h1>
         <p>Input transaksi, kelola keuangan warga, dan buat laporan lengkap</p>
     </div>
     """, unsafe_allow_html=True)
