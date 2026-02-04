@@ -949,55 +949,83 @@ def dashboard_pengepul():
             st.info("Tidak ada transaksi pada periode dan filter yang dipilih")
 
 # Helpers for PDF laporan with charts
-def _create_donut_chart(category_totals):
-    if not category_totals:
+# Helpers for PDF laporan with charts
+def _create_bar_chart(data, title, xlabel, color='#1E88E5', top_n=10, ascending=False):
+    """Create a horizontal bar chart."""
+    if not data:
         return None
 
-    labels = list(category_totals.keys())
-    values = list(category_totals.values())
+    # Sort and slice
+    sorted_items = sorted(data.items(), key=lambda x: x[1], reverse=not ascending)[:top_n]
+    if not sorted_items:
+        return None
+    
+    # Reverse for plotting (bottom-to-top)
+    labels = [k for k, v in sorted_items][::-1]
+    values = [v for k, v in sorted_items][::-1]
 
-    fig, ax = plt.subplots(figsize=(4, 4))
-    wedges, _texts, autotexts = ax.pie(
-        values,
-        labels=labels,
-        autopct="%1.1f%%",
-        startangle=90,
-        pctdistance=0.8,
-        wedgeprops={"width": 0.45, "edgecolor": "white"},
-        textprops={"fontsize": 8},
-    )
-    plt.setp(autotexts, color="white", weight="bold")
-    ax.set_title("Kontribusi per Kategori", fontsize=10)
-    ax.axis("equal")
+    fig, ax = plt.subplots(figsize=(7, 4))
+    bars = ax.barh(labels, values, color=color, alpha=0.8)
+    
+    # Value labels
+    for bar in bars:
+        width = bar.get_width()
+        label_x_pos = width + (max(values) * 0.01) if values else 0
+        ax.text(label_x_pos, bar.get_y() + bar.get_height()/2, f'{width:,.0f}', 
+                va='center', fontsize=8)
+
+    ax.set_title(title, fontsize=10, pad=10)
+    ax.set_xlabel(xlabel, fontsize=8)
+    ax.tick_params(axis='both', which='major', labelsize=8)
+    
+    # Remove borders
+    ax.spines['top'].set_visible(False)
+    ax.spines['right'].set_visible(False)
+    
     plt.tight_layout()
 
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", bbox_inches="tight")
+    fig.savefig(buffer, format="png", bbox_inches="tight", dpi=100)
     plt.close(fig)
     buffer.seek(0)
     return buffer
 
 
-def _create_line_chart(daily_totals):
-    if not daily_totals:
+def _create_dual_line_chart(dates, sales, fees):
+    """Create a dual line chart for sales and committee revenue."""
+    if not dates:
         return None
 
-    ordered = sorted(daily_totals.items())
-    dates = [datetime.strptime(str(d[0])[:10], "%Y-%m-%d") for d in ordered]
-    values = [d[1] for d in ordered]
+    fig, ax1 = plt.subplots(figsize=(7, 4))
 
-    fig, ax = plt.subplots(figsize=(6, 3.2))
-    ax.plot(dates, values, marker="o", color="#1E88E5", linewidth=2)
-    ax.fill_between(dates, values, color="#BBDEFB", alpha=0.4)
-    ax.set_title("Tren Nilai Transaksi", fontsize=10)
-    ax.set_xlabel("Tanggal")
-    ax.set_ylabel("Total (Rp)")
-    fig.autofmt_xdate(rotation=30)
-    ax.grid(True, linestyle="--", linewidth=0.5, alpha=0.6)
+    # Plot Sales (Total Transaction Value)
+    color = '#1E88E5'
+    ax1.set_xlabel('Tanggal', fontsize=8)
+    ax1.set_ylabel('Transaksi Penjualan (Rp)', color=color, fontsize=8)
+    line1 = ax1.plot(dates, sales, marker='o', color=color, linewidth=2, label='Transaksi')
+    ax1.tick_params(axis='y', labelcolor=color, labelsize=8)
+    ax1.tick_params(axis='x', labelsize=8, rotation=30)
+    ax1.grid(True, linestyle='--', alpha=0.3)
+
+    # Instantiate a second axes that shares the same x-axis
+    ax2 = ax1.twinx()
+    color = '#4CAF50'
+    ax2.set_ylabel('Pendapatan Panitia (Rp)', color=color, fontsize=8)
+    line2 = ax2.plot(dates, fees, marker='s', color=color, linewidth=2, linestyle='--', label='Pendapatan Panitia')
+    ax2.tick_params(axis='y', labelcolor=color, labelsize=8)
+
+    # Added title and legend
+    plt.title("Tren Transaksi Penjualan vs Pendapatan Panitia", fontsize=10, pad=10)
+    
+    # Legend
+    lines = line1 + line2
+    labels = [l.get_label() for l in lines]
+    ax1.legend(lines, labels, loc='upper left', fontsize=8)
+
     plt.tight_layout()
 
     buffer = io.BytesIO()
-    fig.savefig(buffer, format="png", bbox_inches="tight")
+    fig.savefig(buffer, format="png", bbox_inches="tight", dpi=100)
     plt.close(fig)
     buffer.seek(0)
     return buffer
@@ -1014,115 +1042,150 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     start_label = start_date.strftime("%d %b %Y") if start_date else "-"
     end_label = end_date.strftime("%d %b %Y") if end_date else "-"
 
+    # --- Data Processing ---
     total_transactions = len(transactions)
     total_weight = sum((t["weight_kg"] or 0) for t in transactions)
     total_revenue = sum((t["total_amount"] or 0) for t in transactions)
     total_fee = sum((t["committee_fee"] or 0) for t in transactions)
-    total_net = sum((t["net_amount"] or 0) for t in transactions)
     warga_unique = len({t["warga_id"] for t in transactions})
-    avg_value = total_revenue / total_transactions if total_transactions else 0
 
-    category_totals = {}
-    daily_totals = {}
-    warga_totals = {}
-    daily_counts = {}
+    # Aggregations
+    category_sales = {} # name -> total_amount
+    category_weights = {} # name -> total_weight
+    warga_activity = {} # name -> count
+    daily_sales = {} # date_str -> amount
+    daily_fees = {} # date_str -> amount
+    
+    # Initialize daily range to ensure continuity in chart (optional, but good for gaps)
+    # Skipping gap filling for simplicity, plotting available data points
+
     for t in transactions:
-        category = t["category_name"]
+        # Category stats
+        cat_name = t["category_name"]
         amount = t["total_amount"] or 0
-        category_totals[category] = category_totals.get(category, 0) + amount
+        weight = t["weight_kg"] or 0
+        category_sales[cat_name] = category_sales.get(cat_name, 0) + amount
+        category_weights[cat_name] = category_weights.get(cat_name, 0) + weight
 
-        date_key = str(t["transaction_date"])[:10]
-        daily_totals[date_key] = daily_totals.get(date_key, 0) + amount
-        daily_counts[date_key] = daily_counts.get(date_key, 0) + 1
+        # Warga stats
+        w_name = t["warga_name"]
+        warga_activity[w_name] = warga_activity.get(w_name, 0) + 1
 
-        warga_name = t["warga_name"] if "warga_name" in t.keys() else "-"
-        warga_totals[warga_name] = warga_totals.get(warga_name, 0) + amount
+        # Daily stats
+        d_key = str(t["transaction_date"])[:10]
+        daily_sales[d_key] = daily_sales.get(d_key, 0) + amount
+        daily_fees[d_key] = daily_fees.get(d_key, 0) + (t["committee_fee"] or 0)
 
-    donut_image = _create_donut_chart(category_totals)
-    line_image = _create_line_chart(daily_totals)
+    # Prepare chart data
+    sorted_dates = sorted(list(set(daily_sales.keys()) | set(daily_fees.keys())))
+    date_objs = [datetime.strptime(d, "%Y-%m-%d") for d in sorted_dates]
+    sales_values = [daily_sales.get(d, 0) for d in sorted_dates]
+    fee_values = [daily_fees.get(d, 0) for d in sorted_dates]
 
-    top_categories = sorted(category_totals.items(), key=lambda item: item[1], reverse=True)[:5]
+    # Generate Charts
+    chart_best_cat = _create_bar_chart(category_sales, "Top 10 Kategori Terlaku (Berdasarkan Nilai Rp)", "Total Penjualan (Rp)", top_n=10, ascending=False)
+    chart_worst_cat = _create_bar_chart(category_sales, "Top 10 Kategori Tidak Laku (Berdasarkan Nilai Rp)", "Total Penjualan (Rp)", color='#FF5722', top_n=10, ascending=True)
+    chart_active_warga = _create_bar_chart(warga_activity, "Top 10 Warga Teraktif", "Jumlah Transaksi", color='#4CAF50', top_n=10, ascending=False)
+    chart_trend = _create_dual_line_chart(date_objs, sales_values, fee_values)
 
-    busiest_day = None
-    if daily_totals:
-        day_key, day_val = max(daily_totals.items(), key=lambda item: item[1])
-        busiest_day = (day_key, day_val, daily_counts.get(day_key, 0))
-
-    top_warga = None
-    if warga_totals:
-        warga_name_top, warga_val_top = max(warga_totals.items(), key=lambda item: item[1])
-        top_warga = (warga_name_top, warga_val_top)
-
-    # Narrative summary to embed in PDF
-    top_cat_text = ", ".join([f"{cat} (Rp {val:,.0f})" for cat, val in top_categories]) if top_categories else "-"
-    category_count = len(category_totals)
-    day_count = len(daily_totals)
-    avg_per_day = total_revenue / day_count if day_count else 0
-
-    busiest_day_text = "-" if not busiest_day else f"{busiest_day[0]} dengan total Rp {busiest_day[1]:,.0f} dari {busiest_day[2]} transaksi"
-    top_warga_text = "-" if not top_warga else f"{top_warga[0]} (Rp {top_warga[1]:,.0f})"
-
-    narrative = (
-        f"Pada periode {start_label} s.d. {end_label}, tercatat {total_transactions} transaksi dari {warga_unique} warga. "
-        f"Total berat sampah tercatat {total_weight:.2f} kg dengan nilai bruto Rp {total_revenue:,.0f}. "
-        f"Admin menerima fee Rp {total_fee:,.0f}, sementara warga menerima bersih Rp {total_net:,.0f}. "
-        f"Rata-rata nilai per transaksi adalah Rp {avg_value:,.0f}, dan rata-rata nilai per hari Rp {avg_per_day:,.0f} (dari {day_count} hari aktif). "
-        f"Kategori dengan kontribusi terbesar: {top_cat_text} (total {category_count} kategori tercatat). "
-        f"Hari tersibuk: {busiest_day_text}. Warga dengan nilai transaksi terbesar: {top_warga_text}."
-    )
-
+    # --- PDF Generation ---
     pdf = FPDF()
-    pdf.add_page()
     pdf.set_auto_page_break(auto=True, margin=15)
 
+    # Page 1: Summary & Narrative
+    pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "Laporan Bank Sampah", ln=True)
-    pdf.set_font("Helvetica", "", 11)
-    pdf.cell(0, 8, f"Periode: {start_label} s.d. {end_label}", ln=True)
-    pdf.cell(0, 8, f"Total transaksi: {total_transactions} | Warga unik: {warga_unique}", ln=True)
-    pdf.cell(0, 8, f"Total berat: {total_weight:.2f} Kg", ln=True)
-    pdf.cell(0, 8, f"Revenue: Rp {total_revenue:,.0f} | Fee admin: Rp {total_fee:,.0f}", ln=True)
-    pdf.cell(0, 8, f"Pendapatan warga (net): Rp {total_net:,.0f}", ln=True)
-    pdf.cell(0, 8, f"Rata-rata per transaksi: Rp {avg_value:,.0f}", ln=True)
-    pdf.ln(2)
-    pdf.multi_cell(0, 7, narrative)
-    pdf.ln(4)
+    pdf.cell(0, 10, "Laporan Bank Sampah Wani Luru", ln=True, align='C')
+    pdf.ln(5)
 
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Top Kategori (berdasarkan revenue)", ln=True)
+    pdf.set_font("Helvetica", "B", 11)
+    pdf.cell(0, 8, f"Periode Laporan: {start_label} s.d. {end_label}", ln=True)
+    pdf.ln(5)
+
+    # Metric Cards (Simple Text representation)
+    pdf.set_font("Helvetica", "", 11)
+    pdf.cell(90, 8, f"Total Transaksi: {total_transactions}", border=1)
+    pdf.cell(90, 8, f"Total Berat: {total_weight:,.2f} Kg", border=1, ln=True)
+    pdf.cell(90, 8, f"Total Penjualan: Rp {total_revenue:,.0f}", border=1)
+    pdf.cell(90, 8, f"Pendapatan Panitia: Rp {total_fee:,.0f}", border=1, ln=True)
+    pdf.cell(90, 8, f"Jumlah Nasabah Aktif: {warga_unique}", border=1)
+    pdf.cell(90, 8, f"Rata-rata Transaksi: Rp {total_revenue/total_transactions if total_transactions else 0:,.0f}", border=1, ln=True)
+    pdf.ln(8)
+
+    # Narrative
     pdf.set_font("Helvetica", "", 10)
-    if top_categories:
-        for cat, val in top_categories:
-            pdf.cell(0, 7, f"- {cat}: Rp {val:,.0f}", ln=True)
-    else:
-        pdf.cell(0, 7, "- Belum ada transaksi pada periode ini", ln=True)
+    narrative = (
+        f"Selama periode {start_label} hingga {end_label}, Bank Sampah Wani Luru mencatat kinerja operasional "
+        f"dengan total omzet penjualan sebesar Rp {total_revenue:,.0f} dari {total_transactions} transaksi yang dilakukan oleh warga. "
+        f"Dari total penjualan tersebut, pendapatan bersih untuk kas panitia/admin tercatat sebesar Rp {total_fee:,.0f}. "
+        f"Aktivitas penyetoran sampah melibatkan {warga_unique} nasabah aktif dengan total volume sampah yang terkelola mencapai {total_weight:,.2f} Kg."
+    )
+    pdf.multi_cell(0, 6, narrative)
+    pdf.ln(10)
+
+    # Chart Section 1
+    if chart_trend:
+        img_path = _buffer_to_tempfile(chart_trend)
+        pdf.image(img_path, x=15, w=180)
+        os.remove(img_path)
+        pdf.ln(5)
 
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, "Visualisasi", ln=True)
+    pdf.cell(0, 10, "Analisis Kategori & Partisipasi Warga", ln=True)
+    
+    # Grid of charts
+    y_start = pdf.get_y()
+    
+    if chart_best_cat:
+        img_path = _buffer_to_tempfile(chart_best_cat)
+        pdf.image(img_path, x=10, y=y_start, w=90)
+        os.remove(img_path)
+
+    if chart_worst_cat:
+        img_path = _buffer_to_tempfile(chart_worst_cat)
+        pdf.image(img_path, x=110, y=y_start, w=90)
+        os.remove(img_path)
+
+    pdf.set_y(y_start + 70) # Adjust based on chart height
+    
+    if chart_active_warga:
+        img_path = _buffer_to_tempfile(chart_active_warga)
+        pdf.image(img_path, x=55, w=100) # Centered
+        os.remove(img_path)
+
+    # Table Section
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 10, "Rincian Penjualan per Kategori", ln=True)
     pdf.ln(2)
 
-    if donut_image:
-        donut_path = _buffer_to_tempfile(donut_image)
-        try:
-            pdf.cell(0, 6, "Donut Chart - Kontribusi per Kategori", ln=True)
-            y_chart = pdf.get_y()
-            pdf.image(donut_path, x=15, y=y_chart, w=80, type="PNG")
-            pdf.set_y(y_chart + 85)
-            pdf.ln(4)
-        finally:
-            os.remove(donut_path)
+    # Table Header
+    pdf.set_fill_color(220, 220, 220)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(10, 8, "No", border=1, align='C', fill=True)
+    pdf.cell(80, 8, "Nama Kategori", border=1, fill=True)
+    pdf.cell(40, 8, "Total Berat", border=1, align='R', fill=True)
+    pdf.cell(60, 8, "Total Penjualan", border=1, align='R', fill=True, ln=True)
 
-    if line_image:
-        line_path = _buffer_to_tempfile(line_image)
-        try:
-            pdf.cell(0, 6, "Line Chart - Tren Nilai Transaksi", ln=True)
-            y_chart = pdf.get_y()
-            pdf.image(line_path, x=15, y=y_chart, w=170, type="PNG")
-            pdf.set_y(y_chart + 80)
-            pdf.ln(4)
-        finally:
-            os.remove(line_path)
+    # Table Content
+    pdf.set_font("Helvetica", "", 10)
+    
+    # Sort categories alphabetically or by value? User said "list penjualan". Usually A-Z or High-Low. 
+    # Let's do High-Low revenue to be useful.
+    sorted_cats = sorted(category_sales.items(), key=lambda x: x[1], reverse=True)
+    
+    for idx, (cat_name, rev) in enumerate(sorted_cats, 1):
+        weight = category_weights.get(cat_name, 0)
+        
+        pdf.cell(10, 7, str(idx), border=1, align='C')
+        pdf.cell(80, 7, cat_name[:35], border=1) # Truncate if too long
+        pdf.cell(40, 7, f"{weight:,.2f} Kg", border=1, align='R')
+        pdf.cell(60, 7, f"Rp {rev:,.0f}", border=1, align='R', ln=True)
+
+    pdf.ln(10)
+    pdf.set_font("Helvetica", "I", 9)
+    pdf.cell(0, 5, f"Dicetak otomatis pada: {datetime.now().strftime('%d/%m/%Y %H:%M')}", align='R')
 
     pdf_buffer = io.BytesIO(pdf.output(dest="S").encode("latin-1"))
     pdf_buffer.seek(0)
