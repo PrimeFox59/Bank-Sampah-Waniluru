@@ -99,51 +99,78 @@ st.markdown("""
         gap: 0.5rem;
     }
     
-    /* Metric cards with SVG background */
-    .metric-card {
-        background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%);
-        border-radius: 15px;
-        padding: 2rem 1.5rem;
-        text-align: center;
-        border: 2px solid #1E88E5;
-        margin: 0.5rem 0;
+    /* Premium Metric Card */
+    .metric-card-container {
+        background: white;
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+        border: 1px solid #E3F2FD;
+        transition: all 0.3s ease;
         position: relative;
         overflow: hidden;
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        height: 100%;
     }
     
-    .metric-card::before {
+    .metric-card-container:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 15px 35px rgba(30,136,229,0.15);
+        border-color: #BBDEFB;
+    }
+
+    .metric-card-container::before {
         content: '';
         position: absolute;
-        top: -20px;
-        right: -20px;
+        top: 0;
+        right: 0;
         width: 100px;
         height: 100px;
-        background: radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
-        border-radius: 50%;
+        background: linear-gradient(135deg, rgba(30,136,229,0.1) 0%, rgba(255,255,255,0) 100%);
+        border-radius: 0 0 0 100%;
+        z-index: 0;
     }
     
-    .metric-card:hover {
-        transform: scale(1.02);
-        box-shadow: 0 6px 12px rgba(30,136,229,0.2);
-    }
-    
-    .metric-card h2 {
-        color: #0D47A1;
-        margin: 0;
-        font-size: 2.5rem;
-        font-weight: 700;
-        text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
-    }
-    
-    .metric-card p {
-        color: #1E88E5;
-        margin: 0.5rem 0 0 0;
-        font-size: 0.95rem;
+    .metric-title {
+        color: #64748B;
+        font-size: 0.85rem;
         font-weight: 600;
         text-transform: uppercase;
-        letter-spacing: 0.5px;
+        letter-spacing: 0.05em;
+        margin-bottom: 8px;
+        z-index: 1;
+        position: relative;
     }
+    
+    .metric-value {
+        color: #1E293B;
+        font-size: 1.8rem;
+        font-weight: 700;
+        z-index: 1;
+        position: relative;
+        line-height: 1.2;
+    }
+
+    .metric-icon {
+        position: absolute;
+        right: 15px;
+        top: 15px;
+        font-size: 2.5rem;
+        opacity: 0.2;
+        z-index: 0;
+        filter: grayscale(100%);
+        transition: all 0.3s ease;
+    }
+    
+    .metric-card-container:hover .metric-icon {
+        opacity: 0.8;
+        filter: grayscale(0%);
+        transform: scale(1.1) rotate(5deg);
+    }
+    
+
     
     /* Button styling */
     .stButton > button {
@@ -412,6 +439,17 @@ st.markdown("""
 
 # Initialize database
 initialize_system()
+
+def ui_metric_card(title, value, icon="📊", color="#1E88E5", help_text=None):
+    """Render a premium metric card using HTML/CSS."""
+    help_html = f'<div title="{help_text}" style="cursor:help; display:inline-block; margin-left:5px;">ℹ️</div>' if help_text else ""
+    st.markdown(f"""
+    <div class="metric-card-container" style="border-left: 4px solid {color};">
+        <div class="metric-icon">{icon}</div>
+        <div class="metric-title">{title} {help_html}</div>
+        <div class="metric-value">{value}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # Initialize session state
 if 'user' not in st.session_state:
@@ -834,13 +872,13 @@ def dashboard_pengepul():
             metric_col1, metric_col2, metric_col3 = st.columns(3)
             
             with metric_col1:
-                st.metric("Total Transaksi", total_trans)
+                ui_metric_card("Total Transaksi", total_trans, icon="🧾")
             
             with metric_col2:
-                st.metric("Total Berat Dibeli", f"{total_weight:.2f} Kg")
+                ui_metric_card("Total Berat Dibeli", f"{total_weight:.2f} Kg", icon="⚖️")
             
             with metric_col3:
-                st.metric("Total Revenue", f"Rp {total_rev:,.0f}")
+                ui_metric_card("Total Revenue", f"Rp {total_rev:,.0f}", icon="💰")
             
             st.markdown("---")
             st.markdown("### Detail per Kategori")
@@ -922,13 +960,13 @@ def dashboard_pengepul():
             metric_col1, metric_col2, metric_col3 = st.columns(3)
             
             with metric_col1:
-                st.metric("Jumlah Transaksi", total_transactions)
+                ui_metric_card("Jumlah Transaksi", total_transactions, icon="🧾")
             
             with metric_col2:
-                st.metric("Total Berat", f"{total_weight_trans:.2f} Kg")
+                ui_metric_card("Total Berat", f"{total_weight_trans:.2f} Kg", icon="⚖️")
             
             with metric_col3:
-                st.metric("Total Revenue", f"Rp {total_revenue_trans:,.0f}")
+                ui_metric_card("Total Revenue", f"Rp {total_revenue_trans:,.0f}", icon="💰")
             
             st.markdown("---")
             
@@ -2003,7 +2041,7 @@ def dashboard_panitia():
                 
                 total_earnings = get_committee_total_earnings(start_date_comm, end_date_comm)
                 
-                st.metric("Total Pendapatan Admin", f"Rp {total_earnings:,.0f}")
+                ui_metric_card("Total Pendapatan Admin", f"Rp {total_earnings:,.0f}", icon="🏦")
             
             with col2:
                 st.markdown("### Detail Pendapatan")
@@ -2341,16 +2379,16 @@ def dashboard_panitia():
                         metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
                         
                         with metric_col1:
-                            st.metric("Total Transaksi", stats['total_transactions'])
+                            ui_metric_card("Total Transaksi", stats['total_transactions'], icon="🧾")
                         
                         with metric_col2:
-                            st.metric("Total Berat", f"{stats['total_weight']:.2f} Kg")
+                            ui_metric_card("Total Berat", f"{stats['total_weight']:.2f} Kg", icon="⚖️")
                         
                         with metric_col3:
-                            st.metric("Total Revenue", f"Rp {stats['total_revenue']:,.0f}")
+                            ui_metric_card("Total Revenue", f"Rp {stats['total_revenue']:,.0f}", icon="💰")
                         
                         with metric_col4:
-                            st.metric("Pendapatan Admin", f"Rp {committee_earnings:,.0f}")
+                            ui_metric_card("Pendapatan Admin", f"Rp {committee_earnings:,.0f}", icon="🏦")
                 
                 else:  # Tahunan
                     year = st.number_input("Tahun", min_value=2020, max_value=2030, value=datetime.now().year, key="year_annual")
@@ -2367,16 +2405,16 @@ def dashboard_panitia():
                         metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
                         
                         with metric_col1:
-                            st.metric("Total Transaksi", stats['total_transactions'])
+                            ui_metric_card("Total Transaksi", stats['total_transactions'], icon="🧾")
                         
                         with metric_col2:
-                            st.metric("Total Berat", f"{stats['total_weight']:.2f} Kg")
+                            ui_metric_card("Total Berat", f"{stats['total_weight']:.2f} Kg", icon="⚖️")
                         
                         with metric_col3:
-                            st.metric("Total Revenue", f"Rp {stats['total_revenue']:,.0f}")
+                            ui_metric_card("Total Revenue", f"Rp {stats['total_revenue']:,.0f}", icon="💰")
                         
                         with metric_col4:
-                            st.metric("Pendapatan Admin", f"Rp {committee_earnings:,.0f}")
+                            ui_metric_card("Pendapatan Admin", f"Rp {committee_earnings:,.0f}", icon="🏦")
             
             with col2:
                 st.markdown("### Riwayat Transaksi")
@@ -2443,17 +2481,17 @@ def dashboard_panitia():
             metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
             
             with metric_col1:
-                st.metric("Total Transaksi", performance['total_transactions'])
+                ui_metric_card("Total Transaksi", performance['total_transactions'], icon="🧾")
             
             with metric_col2:
-                st.metric("Total Berat", f"{performance['total_weight']:.2f} Kg")
+                ui_metric_card("Total Berat", f"{performance['total_weight']:.2f} Kg", icon="⚖️")
             
             with metric_col3:
-                st.metric("Total Pendapatan", f"Rp {performance['total_earned']:,.0f}")
+                ui_metric_card("Total Pendapatan", f"Rp {performance['total_earned']:,.0f}", icon="💰")
             
             with metric_col4:
                 current_balance = get_user_balance(warga_id)
-                st.metric("Saldo Saat Ini", f"Rp {current_balance:,.0f}")
+                ui_metric_card("Saldo Saat Ini", f"Rp {current_balance:,.0f}", icon="💳")
             
             # Transaction history for this warga
             st.markdown("### Riwayat Transaksi")
@@ -3009,16 +3047,16 @@ def dashboard_superuser():
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("Total Transaksi", total_transactions)
+            ui_metric_card("Total Transaksi", total_transactions, icon="🧾")
         
         with col2:
-            st.metric("Total Berat", f"{total_weight:.2f} Kg")
+            ui_metric_card("Total Berat", f"{total_weight:.2f} Kg", icon="⚖️")
         
         with col3:
-            st.metric("Total Revenue", f"Rp {total_revenue:,.0f}")
+            ui_metric_card("Total Revenue", f"Rp {total_revenue:,.0f}", icon="💰")
         
         with col4:
-            st.metric("Pendapatan Admin", f"Rp {total_committee:,.0f}")
+            ui_metric_card("Pendapatan Admin", f"Rp {total_committee:,.0f}", icon="🏦")
         
         st.markdown("---")
         
