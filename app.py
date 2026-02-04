@@ -1495,23 +1495,10 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     return pdf_buffer
 
 
-def dashboard_panitia():
-    """Dashboard for Panitia (Admin)"""
-    # Sidebar Navigation for Admin
-    if st.session_state['user']['role'] == 'panitia': # 'panitia' represents 'Admin' role in this app
-        menu = st.sidebar.radio("Menu Admin", ["Dashboard", "Manajemen Operasional"], index=0)
-        
-        if menu == "Dashboard":
-            dashboard_admin_home()
-            return
-            
-    st.title("🛠️ Dashboard Manajemen (Admin)")
-
-    tab_transaksi, tab_laporan, tab_cat, tab_warga, tab_keu, tab_settings = st.tabs([
-        "🛒 Transaksi", "📊 Laporan", "♻️ Kategori", "👥 Warga", "💰 Keuangan", "⚙️ Pengaturan"
-    ])
-    
-    _render_admin_tab_transaksi(tab_transaksi)
+def _render_admin_tab_transaksi(tab_transaksi):
+    """Shared transaksi tab for admin-like roles (admin, panitia)."""
+    with tab_transaksi:
+        trans_tab_input, trans_tab_history = st.tabs(["➕ Input Transaksi", "📜 History Transaksi"])
 
         with trans_tab_input:
             st.subheader("➕ Input Transaksi Penjualan Sampah")
