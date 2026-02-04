@@ -752,56 +752,35 @@ def clear_dummy_data(superuser_id):
     log_audit(superuser_id, 'DUMMY_DATA_OFF', 'Superuser mematikan data dummy demo')
     return True, "Data dummy berhasil dihapus"
 
-def login_page():
-    """Display login page"""
+def sidebar_login():
+    """Display login form in sidebar"""
+    st.sidebar.markdown("### 🔐 Login Akses")
     
-    # Header
-    st.markdown("""
-    <div class="main-header" style="text-align: center;">
-        <h1>♻️ Bank Sampah Wani Luru RW 1</h1>
-        <p>Sistem Manajemen Bank Sampah Digital</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Login container
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:             
-        username = st.text_input("👤 Username", placeholder="Masukkan username Anda")
-        password = st.text_input("🔒 Password", type="password", placeholder="Masukkan password Anda")
+    with st.sidebar.form("login_form"):
+        username = st.text_input("👤 Username", placeholder="Username")
+        password = st.text_input("🔒 Password", type="password", placeholder="Password")
         
-        st.markdown("<br>", unsafe_allow_html=True)
+        st.markdown("")
+        submitted = st.form_submit_button("🚀 Login", use_container_width=True, type="primary")
         
-        if st.button("🚀 Login Sekarang", use_container_width=True):
+        if submitted:
             if username and password:
-                with st.spinner("Memproses login..."):
-                    user = authenticate_user(username, password)
-                    if user:
-                        st.session_state['user'] = user
-                        log_audit(user['id'], 'LOGIN', f"User {username} logged in")
-                        st.success(f"✅ Selamat datang, {user['full_name']}!")
-                        st.balloons()
-                        st.rerun()
-                    else:
-                        st.error("❌ Username atau password salah!")
+                user = authenticate_user(username, password)
+                if user:
+                    st.session_state['user'] = user
+                    log_audit(user['id'], 'LOGIN', f"User {username} logged in")
+                    st.success(f"✅ Login sukses!")
+                    st.rerun()
+                else:
+                    st.error("❌ Akun tidak ditemukan")
             else:
-                st.warning("⚠️ Silakan isi username dan password!")
-        
-        # Help section
-        st.markdown("<br>", unsafe_allow_html=True)
-        
-        with st.expander("ℹ️ Bantuan Login - Klik untuk melihat"):
-            st.markdown("""
-            <div class="info-card">
-                <h3>📚 Panduan Login</h3>
-                <p><strong>Untuk pengguna baru:</strong></p>
-                <ul>
-                    <li>Hubungi administrator untuk mendapatkan akun</li>
-                    <li>Gunakan username dan password yang diberikan</li>
-                    <li>Ganti password setelah login pertama kali</li>
-                </ul>
-            </div>
-            """, unsafe_allow_html=True)
+                st.warning("⚠️ Isi username & password")
+
+    # Help section in sidebar
+    with st.sidebar.expander("ℹ️ Bantuan"):
+        st.markdown("""
+        Hubungi Admin jika belum memiliki akun.
+        """)
             
 
     
@@ -3209,12 +3188,122 @@ def dashboard_superuser():
                 )
                 st.dataframe(df_top, use_container_width=True, hide_index=True)
 
+def dashboard_public():
+    """Public dashboard shown when not logged in"""
+    # Header Hero
+    st.markdown("""
+    <div style="text-align: center; padding: 3rem 1rem; background: linear-gradient(135deg, #E3F2FD 0%, #BBDEFB 100%); border-radius: 20px; margin-bottom: 2rem; box-shadow: 0 10px 20px rgba(0,0,0,0.05);">
+        <h1 style="color: #0D47A1; font-size: 2.5rem; margin-bottom: 0.5rem;">♻️ Bank Sampah Wani Luru RW 1</h1>
+        <p style="color: #1565C0; font-size: 1.2rem; margin: 0;">Bersama Membangun Lingkungan yang Bersih dan Bernilai</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # --- Top Cards ---
+    st.subheader("📊 Statistik Terkini")
+    col1, col2, col3, col4 = st.columns(4)
+    
+    conn = get_connection()
+    cursor = conn.cursor()
+    
+    cursor.execute('SELECT COUNT(*) FROM transactions')
+    total_trans = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT SUM(weight_kg) FROM transactions')
+    total_weight = cursor.fetchone()[0] or 0
+    
+    cursor.execute('SELECT SUM(total_amount) FROM transactions')
+    total_rev = cursor.fetchone()[0] or 0
+    
+    cursor.execute('SELECT COUNT(DISTINCT warga_id) FROM transactions')
+    active_warga = cursor.fetchone()[0]
+    
+    conn.close()
+    
+    with col1:
+        ui_metric_card("Total Transaksi", total_trans, icon="🧾")
+    with col2:
+        ui_metric_card("Sampah Terkumpul", f"{total_weight:,.2f} Kg", icon="⚖️")
+    with col3:
+        ui_metric_card("Perputaran Ekonomi", f"Rp {total_rev:,.0f}", icon="💰")
+    with col4:
+        ui_metric_card("Warga Berpartisipasi", active_warga, icon="👥")
+        
+    st.markdown("---")
+    
+    # --- Charts ---
+    c1, c2 = st.columns([2, 1])
+    
+    with c1:
+        st.markdown("### 📈 Tren Partisipasi (30 Hari)")
+        end_date = datetime.now()
+        start_date = end_date - timedelta(days=30)
+        
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT date(transaction_date) as d, SUM(total_amount) as total
+            FROM transactions 
+            WHERE date(transaction_date) BETWEEN ? AND ?
+            GROUP BY date(transaction_date)
+            ORDER BY d
+        ''', (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+        daily_data = cursor.fetchall()
+        conn.close()
+        
+        if daily_data:
+            df_trend = pd.DataFrame(daily_data, columns=['Tanggal', 'Total'])
+            df_trend['Tanggal'] = pd.to_datetime(df_trend['Tanggal'])
+            st.line_chart(df_trend.set_index('Tanggal'), color="#1E88E5")
+        else:
+            st.info("Data sedang diperbarui...")
+
+    with c2:
+        st.markdown("### 🏆 Top Warga")
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            SELECT u.full_name, COUNT(*) as cnt
+            FROM transactions t
+            JOIN users u ON t.warga_id = u.id
+            GROUP BY t.warga_id
+            ORDER BY cnt DESC
+            LIMIT 5
+        ''')
+        top_warga = cursor.fetchall()
+        conn.close()
+        
+        if top_warga:
+            df_top = pd.DataFrame(top_warga, columns=['Nama', 'Transaksi'])
+            st.dataframe(df_top, use_container_width=True, hide_index=True)
+        else:
+            st.info("Data sedang diperbarui...")
+
+    # Categories
+    st.markdown("### ♻️ Komposisi Sampah")
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT c.name, SUM(t.weight_kg) as total_w
+        FROM transactions t
+        JOIN categories c ON t.category_id = c.id
+        GROUP BY t.category_id
+        ORDER BY total_w DESC
+        LIMIT 10
+    ''')
+    cat_stats = cursor.fetchall()
+    conn.close()
+    
+    if cat_stats:
+        df_cat = pd.DataFrame(cat_stats, columns=['Kategori', 'Total Berat (Kg)'])
+        st.bar_chart(df_cat.set_index('Kategori'), color="#4CAF50")
+
 def main():
     """Main application"""
     
     # Check if user is logged in
     if not st.session_state['user']:
-        login_page()
+        sidebar_login()
+        dashboard_public()
         return
     
     # Sidebar
