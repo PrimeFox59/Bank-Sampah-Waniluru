@@ -1039,8 +1039,8 @@ def _buffer_to_tempfile(buffer, suffix=".png"):
 
 
 def generate_pdf_laporan(transactions, start_date, end_date):
-    start_label = start_date.strftime("%d %b %Y") if start_date else "-"
-    end_label = end_date.strftime("%d %b %Y") if end_date else "-"
+    start_label = start_date.strftime("%d %B %Y") if start_date else "-"
+    end_label = end_date.strftime("%d %B %Y") if end_date else "-"
 
     # --- Data Processing ---
     total_transactions = len(transactions)
@@ -1056,9 +1056,6 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     daily_sales = {} # date_str -> amount
     daily_fees = {} # date_str -> amount
     
-    # Initialize daily range to ensure continuity in chart (optional, but good for gaps)
-    # Skipping gap filling for simplicity, plotting available data points
-
     for t in transactions:
         # Category stats
         cat_name = t["category_name"]
@@ -1089,51 +1086,177 @@ def generate_pdf_laporan(transactions, start_date, end_date):
     chart_trend = _create_dual_line_chart(date_objs, sales_values, fee_values)
 
     # --- PDF Generation ---
-    pdf = FPDF()
-    pdf.set_auto_page_break(auto=True, margin=15)
+    class LaporanPDF(FPDF):
+        def header(self):
+            # No header on cover page (page 1)
+            if self.page_no() > 1:
+                self.set_font('Helvetica', 'I', 8)
+                self.set_text_color(128)
+                self.cell(0, 10, 'Bank Sampah Wani Luru - Laporan Kinerja Operasional', 0, 0, 'R')
+                self.ln(10)
+        
+        def footer(self):
+            self.set_y(-15)
+            self.set_font('Helvetica', 'I', 8)
+            self.set_text_color(128)
+            self.cell(0, 10, f'Halaman {self.page_no()}', 0, 0, 'C')
 
-    # Page 1: Summary & Narrative
+    pdf = LaporanPDF()
+    pdf.set_auto_page_break(auto=True, margin=20)
+
+    # 1. Halaman Judul (Cover)
+    pdf.add_page()
+    pdf.set_draw_color(30, 136, 229) # Blue border
+    pdf.set_line_width(1)
+    pdf.rect(10, 10, 190, 277)
+    
+    pdf.ln(60)
+    pdf.set_font("Helvetica", "B", 24)
+    pdf.set_text_color(13, 71, 161) # Dark Blue
+    pdf.multi_cell(0, 15, "LAPORAN KINERJA\nBANK SAMPAH WANI LURU", align='C')
+    
+    pdf.ln(20)
+    pdf.set_font("Helvetica", "", 14)
+    pdf.set_text_color(0)
+    pdf.cell(0, 10, f"Periode: {start_label} s.d. {end_label}", ln=True, align='C')
+    
+    pdf.ln(80)
+    pdf.set_font("Helvetica", "", 12)
+    pdf.cell(0, 8, "Disusun Oleh:", ln=True, align='C')
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "Tim Pengelola Bank Sampah Wani Luru", ln=True, align='C')
+    pdf.ln(5)
+    pdf.set_font("Helvetica", "", 12)
+    pdf.cell(0, 8, f"Waniluru, {datetime.now().strftime('%d %B %Y')}", ln=True, align='C')
+
+    # 2. Kata Pengantar
     pdf.add_page()
     pdf.set_font("Helvetica", "B", 16)
-    pdf.cell(0, 10, "Laporan Bank Sampah Wani Luru", ln=True, align='C')
-    pdf.ln(5)
-
-    pdf.set_font("Helvetica", "B", 11)
-    pdf.cell(0, 8, f"Periode Laporan: {start_label} s.d. {end_label}", ln=True)
-    pdf.ln(5)
-
-    # Metric Cards (Simple Text representation)
-    pdf.set_font("Helvetica", "", 11)
-    pdf.cell(90, 8, f"Total Transaksi: {total_transactions}", border=1)
-    pdf.cell(90, 8, f"Total Berat: {total_weight:,.2f} Kg", border=1, ln=True)
-    pdf.cell(90, 8, f"Total Penjualan: Rp {total_revenue:,.0f}", border=1)
-    pdf.cell(90, 8, f"Pendapatan Panitia: Rp {total_fee:,.0f}", border=1, ln=True)
-    pdf.cell(90, 8, f"Jumlah Nasabah Aktif: {warga_unique}", border=1)
-    pdf.cell(90, 8, f"Rata-rata Transaksi: Rp {total_revenue/total_transactions if total_transactions else 0:,.0f}", border=1, ln=True)
-    pdf.ln(8)
-
-    # Narrative
-    pdf.set_font("Helvetica", "", 10)
-    narrative = (
-        f"Selama periode {start_label} hingga {end_label}, Bank Sampah Wani Luru mencatat kinerja operasional "
-        f"dengan total omzet penjualan sebesar Rp {total_revenue:,.0f} dari {total_transactions} transaksi yang dilakukan oleh warga. "
-        f"Dari total penjualan tersebut, pendapatan bersih untuk kas panitia/admin tercatat sebesar Rp {total_fee:,.0f}. "
-        f"Aktivitas penyetoran sampah melibatkan {warga_unique} nasabah aktif dengan total volume sampah yang terkelola mencapai {total_weight:,.2f} Kg."
-    )
-    pdf.multi_cell(0, 6, narrative)
+    pdf.cell(0, 10, "KATA PENGANTAR", ln=True, align='C')
     pdf.ln(10)
+    
+    pdf.set_font("Helvetica", "", 11)
+    intro_text = (
+        "Puji syukur kami panjatkan ke hadirat Tuhan Yang Maha Esa atas rahmat dan karunia-Nya, "
+        "sehingga kami dapat menyelesaikan Laporan Kinerja Operasional Bank Sampah Wani Luru ini dengan baik. "
+        "Laporan ini disusun sebagai bentuk pertanggungjawaban dan transparansi pengelolaan bank sampah kepada "
+        "seluruh warga dan pemangku kepentingan.\n\n"
+        "Melalui laporan ini, kami menyajikan data dan analisis mengenai aktivitas pengelolaan sampah, "
+        "termasuk volume sampah yang tereduksi, nilai ekonomi yang dihasilkan, serta partisipasi warga "
+        "selama periode pelaporan. Kami berharap laporan ini dapat menjadi bahan evaluasi untuk meningkatkan "
+        "kinerja dan layanan Bank Sampah Wani Luru ke depannya.\n\n"
+        "Terima kasih kami sampaikan kepada seluruh warga yang telah aktif berpartisipasi, serta semua pihak "
+        "yang telah mendukung operasional bank sampah ini."
+    )
+    pdf.multi_cell(0, 7, intro_text)
+    
+    pdf.ln(20)
+    pdf.cell(0, 7, f"Waniluru, {datetime.now().strftime('%d %B %Y')}", ln=True, align='R')
+    pdf.ln(15)
+    pdf.cell(0, 7, "Pengelola", ln=True, align='R')
 
-    # Chart Section 1
+    # 3. Daftar Isi (Simulated)
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 16)
+    pdf.cell(0, 10, "DAFTAR ISI", ln=True, align='C')
+    pdf.ln(10)
+    
+    pdf.set_font("Helvetica", "", 11)
+    toc = [
+        ("BAB I PENDAHULUAN", "4"),
+        ("BAB II LAPORAN UTAMA & DATA", "5"),
+        ("BAB III ANALISIS VISUAL", "6"),
+        ("BAB IV PENUTUP", "7"),
+        ("LAMPIRAN", "8"),
+    ]
+    for title, page in toc:
+        pdf.cell(170, 8, title, 0, 0)
+        pdf.cell(20, 8, page, 0, 1, 'R')
+        pdf.line(pdf.get_x(), pdf.get_y(), pdf.get_x() + 190, pdf.get_y()) # Dotted line simulation logic skipped for simplicity
+
+    # 4. Pendahuluan
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "BAB I", ln=True, align='C')
+    pdf.cell(0, 10, "PENDAHULUAN", ln=True, align='C')
+    pdf.ln(5)
+    
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "1.1 Latar Belakang", ln=True)
+    pdf.set_font("Helvetica", "", 11)
+    latar_belakang = (
+        "Permasalahan sampah merupakan isu lingkungan yang memerlukan perhatian serius dan penanganan "
+        "yang berkelanjutan. Bank Sampah Wani Luru hadir sebagai solusi berbasis masyarakat untuk "
+        "mengelola sampah secara mandiri, mengubah sampah menjadi sumber daya ekonomi, dan membangun "
+        "kesadaran lingkungan di tengah masyarakat."
+    )
+    pdf.multi_cell(0, 7, latar_belakang)
+    pdf.ln(5)
+    
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "1.2 Tujuan", ln=True)
+    pdf.set_font("Helvetica", "", 11)
+    tujuan = (
+        "Laporan ini disusun dengan tujuan:\n"
+        "1. Memberikan gambaran kinerja operasional Bank Sampah Wani Luru.\n"
+        "2. Melaporkan data kuantitatif volume sampah dan nilai transaksi.\n"
+        "3. Mengevaluasi tingkat partisipasi warga dalam program bank sampah.\n"
+        "4. Sebagai bahan pertimbangan dalam pengambilan keputusan strategis."
+    )
+    pdf.multi_cell(0, 7, tujuan)
+
+    # 5. Isi/Laporan Utama
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "BAB II", ln=True, align='C')
+    pdf.cell(0, 10, "LAPORAN UTAMA & DATA", ln=True, align='C')
+    pdf.ln(5)
+
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "2.1 Ringkasan Kinerja", ln=True)
+    pdf.ln(2)
+    
+    # Metric Grid Layout
+    pdf.set_font("Helvetica", "", 11)
+    col_width = 95
+    line_height = 10
+    
+    pdf.cell(col_width, line_height, f"Total Transaksi: {total_transactions}", border=1)
+    pdf.cell(col_width, line_height, f"Nasabah Aktif: {warga_unique} Orang", border=1, ln=True)
+    pdf.cell(col_width, line_height, f"Total Berat Terkumpul: {total_weight:,.2f} Kg", border=1)
+    pdf.cell(col_width, line_height, f"Volume Rata-rata/Hari: {total_weight/max(1, (end_date-start_date).days):,.2f} Kg", border=1, ln=True)
+    pdf.cell(col_width, line_height, f"Total Omzet Penjualan: Rp {total_revenue:,.0f}", border=1)
+    pdf.cell(col_width, line_height, f"Pendapatan Bersih Panitia: Rp {total_fee:,.0f}", border=1, ln=True)
+    
+    pdf.ln(10)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "2.2 Narasi Operasional", ln=True)
+    pdf.set_font("Helvetica", "", 11)
+    narasi_ops = (
+        f"Pada periode pelaporan ini, Bank Sampah Wani Luru telah berhasil memfasilitasi {total_transactions} transaksi "
+        f"penyetoran sampah. Hal ini menunjukkan antusiasme warga yang positif. Total nilai ekonomi yang berputar "
+        f"mencapai Rp {total_revenue:,.0f}, dengan kontribusi pendapatan untuk operasional (fee) sebesar Rp {total_fee:,.0f}. "
+        f"Sampah jenis {sorted(category_sales.items(), key=lambda x: x[1], reverse=True)[0][0] if category_sales else 'Umum'} "
+        f"menjadi komoditas dengan nilai transaksi tertinggi."
+    )
+    pdf.multi_cell(0, 7, narasi_ops)
+
+    # 6. Analisis Visual (Charts)
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "BAB III", ln=True, align='C')
+    pdf.cell(0, 10, "ANALISIS VISUAL", ln=True, align='C')
+    pdf.ln(5)
+
     if chart_trend:
         img_path = _buffer_to_tempfile(chart_trend)
         pdf.image(img_path, x=15, w=180)
         os.remove(img_path)
         pdf.ln(5)
+        pdf.set_font("Helvetica", "I", 10)
+        pdf.cell(0, 5, "Gambar 1. Grafik tren transaksi harian menunjukkan fluktuasi aktivitas penyetoran.", ln=True, align='C')
+        pdf.ln(10)
 
-    pdf.add_page()
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 10, "Analisis Kategori & Partisipasi Warga", ln=True)
-    
     # Grid of charts
     y_start = pdf.get_y()
     
@@ -1147,17 +1270,58 @@ def generate_pdf_laporan(transactions, start_date, end_date):
         pdf.image(img_path, x=110, y=y_start, w=90)
         os.remove(img_path)
 
-    pdf.set_y(y_start + 70) # Adjust based on chart height
+    pdf.set_y(y_start + 70) 
     
+    pdf.ln(5)
+    pdf.cell(0, 5, "Gambar 2. Perbandingan kategori sampah berdasarkan nilai ekonomi (Tertinggi vs Terendah).", ln=True, align='C')
+    
+    pdf.add_page()
     if chart_active_warga:
         img_path = _buffer_to_tempfile(chart_active_warga)
-        pdf.image(img_path, x=55, w=100) # Centered
+        pdf.image(img_path, x=55, w=100)
         os.remove(img_path)
+        pdf.ln(5)
+        pdf.cell(0, 5, "Gambar 3. Sepuluh warga dengan frekuensi penyetoran teraktif.", ln=True, align='C')
 
-    # Table Section
+    # 7. Penutup
     pdf.add_page()
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "BAB IV", ln=True, align='C')
+    pdf.cell(0, 10, "PENUTUP", ln=True, align='C')
+    pdf.ln(5)
+
     pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 10, "Rincian Penjualan per Kategori", ln=True)
+    pdf.cell(0, 8, "4.1 Kesimpulan", ln=True)
+    pdf.set_font("Helvetica", "", 11)
+    
+    top_cat_name = sorted(category_sales.items(), key=lambda x: x[1], reverse=True)[0][0] if category_sales else "-"
+    kesimpulan = (
+        "Berdasarkan data yang telah dipaparkan, dapat disimpulkan bahwa:\n"
+        f"1. Kinerja bank sampah berjalan baik dengan partisipasi {warga_unique} nasabah aktif.\n"
+        f"2. Jenis sampah '{top_cat_name}' memiliki nilai ekonomi paling signifikan.\n"
+        "3. Sistem administrasi dan pencatatan transaksi telah berjalan transparan."
+    )
+    pdf.multi_cell(0, 7, kesimpulan)
+    pdf.ln(5)
+
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "4.2 Saran", ln=True)
+    pdf.set_font("Helvetica", "", 11)
+    saran = (
+        "1. Perlu dilakukan sosialisasi kembali untuk kategori sampah yang masih rendah penyetorannya.\n"
+        "2. Meningkatkan apresiasi kepada warga yang aktif untuk memotivasi warga lainnya.\n"
+        "3. Mempertahankan konsistensi jadwal pelayanan dan akurasi penimbangan."
+    )
+    pdf.multi_cell(0, 7, saran)
+
+    # 8. Lampiran (Table)
+    pdf.add_page()
+    pdf.set_font("Helvetica", "B", 14)
+    pdf.cell(0, 10, "LAMPIRAN", ln=True, align='C')
+    pdf.ln(5)
+    
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, "Rincian Data Penjualan per Kategori", ln=True)
     pdf.ln(2)
 
     # Table Header
@@ -1170,22 +1334,14 @@ def generate_pdf_laporan(transactions, start_date, end_date):
 
     # Table Content
     pdf.set_font("Helvetica", "", 10)
-    
-    # Sort categories alphabetically or by value? User said "list penjualan". Usually A-Z or High-Low. 
-    # Let's do High-Low revenue to be useful.
     sorted_cats = sorted(category_sales.items(), key=lambda x: x[1], reverse=True)
     
     for idx, (cat_name, rev) in enumerate(sorted_cats, 1):
         weight = category_weights.get(cat_name, 0)
-        
         pdf.cell(10, 7, str(idx), border=1, align='C')
-        pdf.cell(80, 7, cat_name[:35], border=1) # Truncate if too long
+        pdf.cell(80, 7, cat_name[:35], border=1)
         pdf.cell(40, 7, f"{weight:,.2f} Kg", border=1, align='R')
         pdf.cell(60, 7, f"Rp {rev:,.0f}", border=1, align='R', ln=True)
-
-    pdf.ln(10)
-    pdf.set_font("Helvetica", "I", 9)
-    pdf.cell(0, 5, f"Dicetak otomatis pada: {datetime.now().strftime('%d/%m/%Y %H:%M')}", align='R')
 
     pdf_buffer = io.BytesIO(bytes(pdf.output()))
     pdf_buffer.seek(0)
