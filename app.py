@@ -784,14 +784,14 @@ def sidebar_login():
             
 
     
-    # Footer
-    st.markdown("---")
-    st.markdown("""
-    <div style="text-align: center; color: #1E88E5; font-size: 0.9rem;">
-        <p>💙 Bank Sampah Wani Luru RW 1 - Untuk Lingkungan yang Lebih Bersih dan Sejahtera</p>
-        <p style="font-size: 0.8rem; color: #90CAF9;">© 2026 Bank Sampah Wani Luru RW 1 Management System</p>
-    </div>
-    """, unsafe_allow_html=True)
+        # Footer
+        st.markdown("---")
+        st.markdown("""
+        <div style="text-align: center; color: #1E88E5; font-size: 0.9rem;">
+            <p>💙 Bank Sampah Wani Luru RW 1 - Untuk Lingkungan yang Lebih Bersih dan Sejahtera</p>
+            <p style="font-size: 0.8rem; color: #90CAF9;">© 2026 Bank Sampah Wani Luru RW 1 Management System</p>
+        </div>
+        """, unsafe_allow_html=True)
 
 def show_superuser_banner():
     """Show banner when superuser is acting as another user"""
