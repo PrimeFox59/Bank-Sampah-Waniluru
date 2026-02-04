@@ -662,39 +662,7 @@ def login_page():
             </div>
             """, unsafe_allow_html=True)
             
-            st.markdown("**Akun Demo untuk Testing:**")
-            
-            col_a, col_b = st.columns(2)
-            
-            with col_a:
-                st.info("""
-                **🟣 Super User**  
-                Username: `superuser`  
-                Password: `admin123`  
-                *Akses penuh sistem*
-                """)
-                
-            with col_b:
-                st.info("""
-                **🔵 Admin**  
-                Username: `panitia1`  
-                Password: `panitia123`  
-                *Input transaksi & keuangan*
-                """)
-                
-                st.info("""
-                **🟠 Panitia**  
-                Username: `inputer1`  
-                Password: `inputer123`  
-                *Input transaksi & kelola kategori*
-                """)
 
-                st.info("""
-                **🟢 Warga**  
-                Username: `warga1`  
-                Password: `warga123`  
-                *Cek saldo & performa*
-                """)
     
     # Footer
     st.markdown("---")
