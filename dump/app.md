@@ -1469,7 +1469,7 @@ def generate_pdf_laporan(transactions, start_date, end_date):
         pdf.cell(40, 7, f"{weight:,.2f} Kg", border=1, align='R')
         pdf.cell(60, 7, f"Rp {rev:,.0f}", border=1, align='R', ln=True)
 
-    pdf_buffer = io.BytesIO(bytes(pdf.output(), 'latin-1'))
+    pdf_buffer = io.BytesIO(bytes(pdf.output()))
     pdf_buffer.seek(0)
     return pdf_buffer
 
@@ -1713,7 +1713,7 @@ def _render_transaction_input_form():
                     pdf.set_font('Helvetica', '', 9)
                     pdf.multi_cell(0, 6, "Kurangi penggunaan kertas, simpan nota ini secara digital.")
 
-                    pdf_data = bytes(pdf.output(), 'latin-1')
+                    pdf_data = bytes(pdf.output())
                     st.session_state['last_pdf_data'] = pdf_data
                     st.session_state['last_pdf_name'] = f"nota_{summary_rows[0]['id']}.pdf"
 
@@ -1977,7 +1977,7 @@ def _render_admin_tab_transaksi(tab_transaksi):
                         pdf.set_font('Helvetica', '', 9)
                         pdf.multi_cell(0, 6, "Kurangi penggunaan kertas, simpan nota ini secara digital.")
 
-                        pdf_data_hist = bytes(pdf.output(), 'latin-1')
+                        pdf_data_hist = bytes(pdf.output())
 
                         st.download_button(
                             label="⬇️ Download Nota (PDF)",
