@@ -20,6 +20,10 @@ def _pdf_output_bytes(pdf):
     output = pdf.output(dest="S")
     if isinstance(output, bytes):
         return output
+    if isinstance(output, bytearray):
+        return bytes(output)
+    if isinstance(output, memoryview):
+        return output.tobytes()
     return output.encode("latin-1")
 
 # Page configuration
