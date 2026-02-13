@@ -1910,7 +1910,7 @@ def _render_transaction_input_form():
     st.markdown("""
     <div class="help-text">
         <strong>📝 Cara Input Transaksi:</strong><br>
-        1. Pilih nama warga yang menjual sampah<br>
+        1. Pilih user penjual (Warga/Admin/Panitia/Inputer)<br>
         2. Pilih kategori sampah (harga otomatis muncul)<br>
         3. Timbang dan masukkan berat dalam Kg<br>
         4. Sistem akan otomatis hitung: Total, Fee Admin (10%), dan Saldo Warga
@@ -2302,10 +2302,10 @@ def _render_admin_tab_transaksi(tab_transaksi):
             filter_col1, filter_col2 = st.columns([2, 2])
 
             with filter_col1:
-                warga_filter_map = {"Semua Warga": None}
-                for w in get_all_users('warga'):
-                    warga_filter_map[f"👤 {w['full_name']} ({w['username']})"] = w['id']
-                selected_warga_label = st.selectbox("Filter Warga", list(warga_filter_map.keys()))
+                warga_filter_map = {"Semua Penjual": None}
+                for w in _get_transaction_participant_users():
+                    warga_filter_map[f"👤 {w['full_name']} ({w['username']}) - {_display_role_label(w['role'])}"] = w['id']
+                selected_warga_label = st.selectbox("Filter Penjual", list(warga_filter_map.keys()))
                 selected_warga_id = warga_filter_map[selected_warga_label]
 
             with filter_col2:
