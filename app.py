@@ -11,6 +11,7 @@ import uuid
 import random
 import os
 import tempfile
+import re
 from fpdf import FPDF
 import matplotlib.pyplot as plt
 
@@ -104,6 +105,221 @@ def _render_top_warga_table(df_top, count_col='Jumlah Transaksi'):
             count_col: st.column_config.NumberColumn(count_col, format='%d'),
         },
     )
+
+
+def _build_category_excel_template():
+    template_df = pd.DataFrame(
+        {
+            'Nama Kategori': ['Plastik Botol', 'Kertas', 'Elektronik Kecil'],
+            'Harga/Kg': [3000, 1000, 8500],
+        }
+    )
+    notes_df = pd.DataFrame(
+        {
+            'Petunjuk': [
+                'Gunakan sheet Kategori untuk update data.',
+                'Kolom wajib: Nama Kategori dan Harga/Kg.',
+                'Nama kategori yang sudah ada akan di-update.',
+                'Nama kategori baru akan ditambahkan otomatis.',
+            ]
+        }
+    )
+
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        template_df.to_excel(writer, sheet_name='Kategori', index=False)
+        notes_df.to_excel(writer, sheet_name='Petunjuk', index=False)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+
+def _normalize_excel_header(value):
+    return re.sub(r'[^a-z0-9]', '', str(value).strip().lower())
+
+
+def _parse_price_value(value):
+    if pd.isna(value):
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    cleaned = re.sub(r'[^0-9,.-]', '', text)
+    if not cleaned:
+        return None
+
+    if ',' in cleaned and '.' in cleaned:
+        if cleaned.rfind(',') > cleaned.rfind('.'):
+            cleaned = cleaned.replace('.', '').replace(',', '.')
+        else:
+            cleaned = cleaned.replace(',', '')
+    elif ',' in cleaned and '.' not in cleaned:
+        parts = cleaned.split(',')
+        if len(parts) > 1 and len(parts[-1]) in (1, 2):
+            cleaned = '.'.join(parts)
+        else:
+            cleaned = ''.join(parts)
+
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def _bulk_upsert_categories_from_excel(uploaded_file):
+    try:
+        df = pd.read_excel(uploaded_file, sheet_name='Kategori')
+    except ValueError:
+        try:
+            df = pd.read_excel(uploaded_file)
+        except Exception as exc:
+            return False, {'error': f'File tidak bisa dibaca: {exc}'}
+    except Exception as exc:
+        return False, {'error': f'File tidak bisa dibaca: {exc}'}
+
+    if df.empty:
+        return False, {'error': 'File Excel kosong.'}
+
+    col_lookup = {_normalize_excel_header(col): col for col in df.columns}
+    name_col = None
+    price_col = None
+
+    for candidate in ['namakategori', 'kategori', 'category', 'name']:
+        if candidate in col_lookup:
+            name_col = col_lookup[candidate]
+            break
+
+    for candidate in ['hargakg', 'hargaperkg', 'harga', 'priceperkg', 'price']:
+        if candidate in col_lookup:
+            price_col = col_lookup[candidate]
+            break
+
+    if not name_col or not price_col:
+        return False, {'error': 'Kolom wajib tidak ditemukan. Gunakan template resmi (Nama Kategori, Harga/Kg).'}
+
+    entries = {}
+    errors = []
+    duplicate_in_file = 0
+
+    for idx, row in df.iterrows():
+        line_no = idx + 2
+        raw_name = row.get(name_col)
+        raw_price = row.get(price_col)
+
+        if (pd.isna(raw_name) or str(raw_name).strip() == '') and pd.isna(raw_price):
+            continue
+
+        category_name = '' if pd.isna(raw_name) else str(raw_name).strip()
+        if not category_name:
+            errors.append({'Baris': line_no, 'Error': 'Nama Kategori kosong'})
+            continue
+
+        parsed_price = _parse_price_value(raw_price)
+        if parsed_price is None or parsed_price <= 0:
+            errors.append({'Baris': line_no, 'Error': 'Harga/Kg tidak valid (harus > 0)'})
+            continue
+
+        key = category_name.casefold()
+        if key in entries:
+            duplicate_in_file += 1
+        entries[key] = {'name': category_name, 'price': parsed_price}
+
+    if not entries:
+        return False, {'error': 'Tidak ada data valid untuk diproses.', 'errors': errors}
+
+    categories = get_all_categories()
+    existing = {c['name'].strip().casefold(): c for c in categories}
+
+    created = 0
+    updated = 0
+    skipped = 0
+
+    for key, payload in entries.items():
+        name = payload['name']
+        price = payload['price']
+
+        if key in existing:
+            current = existing[key]
+            if abs(float(current['price_per_kg']) - float(price)) < 1e-9:
+                skipped += 1
+                continue
+            update_category_price(current['id'], price)
+            updated += 1
+        else:
+            success, message = create_category(name, price)
+            if success:
+                created += 1
+            else:
+                errors.append({'Baris': '-', 'Error': f'{name}: {message}'})
+
+    return True, {
+        'created': created,
+        'updated': updated,
+        'skipped': skipped,
+        'duplicate_in_file': duplicate_in_file,
+        'errors': errors,
+    }
+
+
+def _render_category_excel_uploader(section_key):
+    st.markdown('### 📥 Update Daftar Kategori via Excel')
+    st.caption('Upload file .xlsx untuk update massal kategori dan harga.')
+
+    result_key = f'category_upload_result_{section_key}'
+    saved_result = st.session_state.pop(result_key, None)
+    if saved_result:
+        st.success(
+            f"✅ Selesai diproses. Ditambah: {saved_result['created']}, "
+            f"Diupdate: {saved_result['updated']}, Tidak berubah: {saved_result['skipped']}"
+        )
+        if saved_result['duplicate_in_file'] > 0:
+            st.info(f"ℹ️ Duplikat nama kategori dalam file: {saved_result['duplicate_in_file']} (baris terakhir yang dipakai).")
+        if saved_result['errors']:
+            st.warning(f"⚠️ Ada {len(saved_result['errors'])} baris gagal diproses.")
+            st.dataframe(pd.DataFrame(saved_result['errors']), use_container_width=True, hide_index=True)
+
+    template_bytes = _build_category_excel_template()
+    st.download_button(
+        '⬇️ Download Template Excel',
+        data=template_bytes,
+        file_name='template_update_kategori.xlsx',
+        mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        use_container_width=True,
+        key=f'download_template_{section_key}',
+    )
+
+    uploaded_file = st.file_uploader(
+        'Upload file kategori (.xlsx)',
+        type=['xlsx'],
+        key=f'upload_category_excel_{section_key}',
+        help='Gunakan template agar format otomatis terbaca.',
+    )
+
+    if st.button('🔄 Proses Update dari Excel', type='primary', use_container_width=True, key=f'process_excel_{section_key}'):
+        if uploaded_file is None:
+            st.warning('Silakan upload file Excel terlebih dahulu.')
+            return
+
+        success, result = _bulk_upsert_categories_from_excel(uploaded_file)
+        if not success:
+            st.error(result.get('error', 'Gagal memproses file Excel.'))
+            if result.get('errors'):
+                st.dataframe(pd.DataFrame(result['errors']), use_container_width=True, hide_index=True)
+            return
+
+        user_id = st.session_state.get('user', {}).get('id')
+        if user_id:
+            log_audit(
+                user_id,
+                'BULK_UPDATE_CATEGORY_EXCEL',
+                f"created={result['created']}, updated={result['updated']}, skipped={result['skipped']}",
+            )
+
+        st.session_state[result_key] = result
+        st.rerun()
 
 # Page configuration
 st.set_page_config(
@@ -970,6 +1186,9 @@ def dashboard_pengepul():
                             st.error(f"Gagal menambah kategori: {message}")
                     else:
                         st.warning("Silakan isi semua field!")
+
+            st.markdown("---")
+            _render_category_excel_uploader('pengepul')
     
     with tab2:
         st.subheader("Riwayat Perubahan Harga")
@@ -2178,6 +2397,9 @@ def _render_admin_tab_categories(tab_cat):
                             st.error(f"Gagal menambah kategori: {message}")
                     else:
                         st.warning("Silakan isi semua field!")
+
+            st.markdown("---")
+            _render_category_excel_uploader('admin_panitia')
 
         st.markdown("---")
         st.subheader("🕑 Riwayat Harga Berdasarkan Transaksi")
