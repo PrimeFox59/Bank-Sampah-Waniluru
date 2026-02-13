@@ -2737,6 +2737,102 @@ def dashboard_panitia():
             else:
                 st.info("Belum ada riwayat keuangan")
 
+            st.markdown("---")
+            st.markdown("### ✏️ Edit / 🗑️ Hapus Data Keuangan")
+
+            edit_col1, edit_col2 = st.columns([1, 3])
+            with edit_col1:
+                user_filter_options = {"Semua User": None}
+                user_filter_options.update({f"{u['full_name']} ({u['username']})": u['id'] for u in get_all_users()})
+                selected_user_label = st.selectbox(
+                    "Filter User",
+                    list(user_filter_options.keys()),
+                    key="finance_edit_user_filter",
+                )
+                selected_user_id = user_filter_options[selected_user_label]
+
+            editable_movements = get_financial_movements(warga_id=selected_user_id, limit=300)
+
+            with edit_col2:
+                if editable_movements:
+                    movement_options = {
+                        (
+                            f"ID {m['id']} | {m['movement_date']} | {m['warga_name']} | "
+                            f"{'Penarikan' if m['type'] == 'withdrawal' else 'Deposit'} | Rp {m['amount']:,.0f}"
+                        ): m
+                        for m in editable_movements
+                    }
+
+                    selected_movement_label = st.selectbox(
+                        "Pilih Data Keuangan",
+                        list(movement_options.keys()),
+                        key="selected_finance_movement",
+                    )
+                    selected_movement = movement_options[selected_movement_label]
+
+                    with st.form("finance_edit_form"):
+                        edit_type = st.selectbox(
+                            "Tipe",
+                            ["deposit", "withdrawal"],
+                            index=0 if selected_movement['type'] == 'deposit' else 1,
+                            format_func=lambda t: "Deposit" if t == "deposit" else "Penarikan",
+                            key="finance_edit_type",
+                        )
+                        edit_amount = st.number_input(
+                            "Jumlah (Rp)",
+                            min_value=0.0,
+                            step=1000.0,
+                            value=float(selected_movement['amount']),
+                            key="finance_edit_amount",
+                        )
+                        edit_notes = st.text_area(
+                            "Catatan",
+                            value=selected_movement['notes'] or "",
+                            key="finance_edit_notes",
+                        )
+
+                        submitted_edit = st.form_submit_button("💾 Simpan Perubahan", use_container_width=True)
+                        if submitted_edit:
+                            success, message = update_financial_movement(
+                                selected_movement['id'],
+                                edit_type,
+                                edit_amount,
+                                edit_notes,
+                                st.session_state['user']['id'],
+                            )
+                            if success:
+                                log_audit(
+                                    st.session_state['user']['id'],
+                                    'UPDATE_FINANCIAL_MOVEMENT',
+                                    f"Updated movement ID {selected_movement['id']} to {edit_type} Rp {edit_amount}",
+                                )
+                                st.success("✅ Data keuangan berhasil diupdate")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Gagal update: {message}")
+
+                    confirm_delete = st.checkbox(
+                        "Saya yakin ingin menghapus data keuangan ini",
+                        key="finance_delete_confirm",
+                    )
+                    if st.button("🗑️ Hapus Data Keuangan", use_container_width=True, key="finance_delete_btn"):
+                        if not confirm_delete:
+                            st.warning("Centang konfirmasi terlebih dahulu sebelum menghapus.")
+                        else:
+                            success, message = delete_financial_movement(selected_movement['id'])
+                            if success:
+                                log_audit(
+                                    st.session_state['user']['id'],
+                                    'DELETE_FINANCIAL_MOVEMENT',
+                                    f"Deleted movement ID {selected_movement['id']}",
+                                )
+                                st.success("✅ Data keuangan berhasil dihapus")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Gagal hapus: {message}")
+                else:
+                    st.info("Tidak ada data keuangan untuk diedit/dihapus pada filter ini.")
+
         with keu_tab_income:
             st.subheader("Pendapatan Admin")
             col1, col2 = st.columns([1, 2])

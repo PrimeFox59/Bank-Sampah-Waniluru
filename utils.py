@@ -180,6 +180,122 @@ def process_deposit(warga_id, amount, processed_by, notes=""):
     
     return True, new_balance
 
+
+def _rebuild_warga_balance_from_movements(cursor, warga_id):
+    """Rebuild balance_before/after for all movements and sync final user balance."""
+    cursor.execute('SELECT SUM(net_amount) FROM transactions WHERE warga_id = ?', (warga_id,))
+    running_balance = cursor.fetchone()[0] or 0
+
+    cursor.execute(
+        '''
+        SELECT id, type, amount
+        FROM financial_movements
+        WHERE warga_id = ?
+        ORDER BY movement_date ASC, id ASC
+        ''',
+        (warga_id,),
+    )
+    movements = cursor.fetchall()
+
+    for movement in movements:
+        movement_id = movement['id']
+        movement_type = movement['type']
+        amount = float(movement['amount'] or 0)
+
+        if amount < 0:
+            raise ValueError(f"Jumlah tidak valid pada movement ID {movement_id}")
+
+        balance_before = running_balance
+        if movement_type == 'deposit':
+            running_balance = balance_before + amount
+        elif movement_type == 'withdrawal':
+            if amount > balance_before:
+                raise ValueError(
+                    f"Saldo tidak mencukupi saat replay movement ID {movement_id}. "
+                    f"Withdrawal Rp {amount:,.0f} > saldo Rp {balance_before:,.0f}"
+                )
+            running_balance = balance_before - amount
+        else:
+            raise ValueError(f"Tipe movement tidak valid pada movement ID {movement_id}: {movement_type}")
+
+        cursor.execute(
+            '''
+            UPDATE financial_movements
+            SET balance_before = ?, balance_after = ?
+            WHERE id = ?
+            ''',
+            (balance_before, running_balance, movement_id),
+        )
+
+    cursor.execute('UPDATE users SET balance = ? WHERE id = ?', (running_balance, warga_id))
+    return running_balance
+
+
+def update_financial_movement(movement_id, movement_type, amount, notes, processed_by):
+    """Edit existing financial movement and keep all balances consistent."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('SELECT id, warga_id FROM financial_movements WHERE id = ?', (movement_id,))
+        movement = cursor.fetchone()
+        if not movement:
+            conn.close()
+            return False, "Data keuangan tidak ditemukan"
+
+        if movement_type not in ('deposit', 'withdrawal'):
+            conn.close()
+            return False, "Tipe transaksi keuangan tidak valid"
+
+        if amount is None or float(amount) <= 0:
+            conn.close()
+            return False, "Jumlah harus lebih dari 0"
+
+        cursor.execute(
+            '''
+            UPDATE financial_movements
+            SET type = ?, amount = ?, notes = ?, processed_by = ?
+            WHERE id = ?
+            ''',
+            (movement_type, float(amount), notes, processed_by, movement_id),
+        )
+
+        _rebuild_warga_balance_from_movements(cursor, movement['warga_id'])
+        conn.commit()
+        conn.close()
+        return True, "Data keuangan berhasil diupdate"
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, str(e)
+
+
+def delete_financial_movement(movement_id):
+    """Delete existing financial movement and keep all balances consistent."""
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('SELECT id, warga_id FROM financial_movements WHERE id = ?', (movement_id,))
+        movement = cursor.fetchone()
+        if not movement:
+            conn.close()
+            return False, "Data keuangan tidak ditemukan"
+
+        warga_id = movement['warga_id']
+        cursor.execute('DELETE FROM financial_movements WHERE id = ?', (movement_id,))
+
+        _rebuild_warga_balance_from_movements(cursor, warga_id)
+        conn.commit()
+        conn.close()
+        return True, "Data keuangan berhasil dihapus"
+
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        return False, str(e)
+
 def get_transactions(warga_id=None, limit=None, start_date=None, end_date=None):
     """Get transactions with optional filters"""
     conn = get_connection()
