@@ -4,6 +4,7 @@ from auth import authenticate_user, log_audit, check_superuser_session, end_supe
 from utils import *
 from svg_icons import get_svg
 import pandas as pd
+import altair as alt
 from datetime import datetime, timedelta
 import io
 import uuid
@@ -25,6 +26,84 @@ def _pdf_output_bytes(pdf):
     if isinstance(output, memoryview):
         return output.tobytes()
     return output.encode("latin-1")
+
+
+def _render_trend_chart(df_trend, x_col='Tanggal', y_col='Total', y_title='Nilai Transaksi (Rp)'):
+    chart_df = df_trend.copy()
+    chart_df[x_col] = pd.to_datetime(chart_df[x_col])
+    chart_df = chart_df.sort_values(x_col)
+
+    base = alt.Chart(chart_df).encode(
+        x=alt.X(
+            f'{x_col}:T',
+            title='Tanggal',
+            axis=alt.Axis(format='%d %b', labelAngle=-20, grid=False),
+        )
+    )
+
+    area = base.mark_area(color='#1E88E5', opacity=0.12).encode(
+        y=alt.Y(f'{y_col}:Q', title=y_title, axis=alt.Axis(format='~s')),
+        tooltip=[
+            alt.Tooltip(f'{x_col}:T', title='Tanggal', format='%d %B %Y'),
+            alt.Tooltip(f'{y_col}:Q', title='Total', format=',.0f'),
+        ],
+    )
+
+    line = base.mark_line(color='#1E88E5', strokeWidth=3).encode(
+        y=alt.Y(f'{y_col}:Q', title=y_title)
+    )
+
+    points = base.mark_circle(color='#0D47A1', size=55).encode(
+        y=alt.Y(f'{y_col}:Q', title=y_title),
+        tooltip=[
+            alt.Tooltip(f'{x_col}:T', title='Tanggal', format='%d %B %Y'),
+            alt.Tooltip(f'{y_col}:Q', title='Total', format=',.0f'),
+        ],
+    )
+
+    chart = (area + line + points).properties(height=320).interactive()
+    st.altair_chart(chart, use_container_width=True)
+
+
+def _render_category_bar_chart(df_cat, category_col='Kategori', value_col='Total Berat (Kg)', value_title='Total Berat (Kg)'):
+    chart_df = df_cat.copy()
+    chart_df = chart_df.sort_values(value_col, ascending=False)
+
+    base = alt.Chart(chart_df)
+
+    bars = base.mark_bar(color='#4CAF50', cornerRadiusTopRight=6, cornerRadiusBottomRight=6).encode(
+        y=alt.Y(f'{category_col}:N', sort='-x', title='Kategori'),
+        x=alt.X(f'{value_col}:Q', title=value_title, axis=alt.Axis(grid=True)),
+        tooltip=[
+            alt.Tooltip(f'{category_col}:N', title='Kategori'),
+            alt.Tooltip(f'{value_col}:Q', title=value_title, format=',.2f'),
+        ],
+    )
+
+    labels = base.mark_text(align='left', baseline='middle', dx=6, color='#1B5E20').encode(
+        y=alt.Y(f'{category_col}:N', sort='-x'),
+        x=alt.X(f'{value_col}:Q'),
+        text=alt.Text(f'{value_col}:Q', format=',.2f'),
+    )
+
+    chart = (bars + labels).properties(height=360)
+    st.altair_chart(chart, use_container_width=True)
+
+
+def _render_top_warga_table(df_top, count_col='Jumlah Transaksi'):
+    table_df = df_top.copy().sort_values(count_col, ascending=False).reset_index(drop=True)
+    table_df.insert(0, 'Peringkat', [f"#{i}" for i in range(1, len(table_df) + 1)])
+
+    st.dataframe(
+        table_df,
+        use_container_width=True,
+        hide_index=True,
+        height=260,
+        column_config={
+            'Peringkat': st.column_config.TextColumn('Rank', width='small'),
+            count_col: st.column_config.NumberColumn(count_col, format='%d'),
+        },
+    )
 
 # Page configuration
 st.set_page_config(
@@ -514,7 +593,7 @@ def dashboard_admin_home():
         if daily_data:
             df_trend = pd.DataFrame(daily_data, columns=['Tanggal', 'Total'])
             df_trend['Tanggal'] = pd.to_datetime(df_trend['Tanggal'])
-            _render_line_chart(df_trend, 'Tanggal', 'Total', "#1E88E5", "Total Transaksi (Rp)")
+            _render_trend_chart(df_trend)
         else:
             st.info("Belum ada data transaksi 30 hari terakhir")
 
@@ -536,8 +615,7 @@ def dashboard_admin_home():
         if top_warga:
             # Horizontal bar chart ref
             df_top = pd.DataFrame(top_warga, columns=['Nama', 'Jumlah Transaksi'])
-            df_top = df_top.sort_values('Jumlah Transaksi', ascending=True)
-            _render_horizontal_bar_chart(df_top, 'Nama', 'Jumlah Transaksi', "#4CAF50", "Jumlah Transaksi")
+            _render_top_warga_table(df_top, count_col='Jumlah Transaksi')
         else:
             st.info("Belum ada data")
 
@@ -558,8 +636,7 @@ def dashboard_admin_home():
     
     if cat_stats:
         df_cat = pd.DataFrame(cat_stats, columns=['Kategori', 'Total Berat (Kg)'])
-        colors = [plt.cm.Greens(0.35 + 0.6 * i / max(1, len(df_cat) - 1)) for i in range(len(df_cat))]
-        _render_vertical_bar_chart(df_cat, 'Kategori', 'Total Berat (Kg)', colors, "Total Berat (Kg)")
+        _render_category_bar_chart(df_cat)
 
 
 def ui_metric_card(title, value, icon="📊", color="#1E88E5", help_text=None):
@@ -572,54 +649,6 @@ def ui_metric_card(title, value, icon="📊", color="#1E88E5", help_text=None):
         <div class="metric-value">{value}</div>
     </div>
     """, unsafe_allow_html=True)
-
-
-def _style_chart_axes(ax):
-    ax.set_facecolor("#FFFFFF")
-    ax.grid(axis="y", linestyle="--", alpha=0.25)
-    ax.spines["top"].set_visible(False)
-    ax.spines["right"].set_visible(False)
-    ax.spines["left"].set_color("#E3F2FD")
-    ax.spines["bottom"].set_color("#E3F2FD")
-    ax.tick_params(colors="#546E7A")
-
-
-def _render_line_chart(df, x_col, y_col, color, y_label):
-    fig, ax = plt.subplots(figsize=(7, 3.4))
-    ax.plot(df[x_col], df[y_col], color=color, linewidth=2.5)
-    ax.fill_between(df[x_col], df[y_col], color=color, alpha=0.12)
-    ax.scatter(df[x_col], df[y_col], s=22, color=color, zorder=3)
-    ax.set_ylabel(y_label, color="#546E7A")
-    _style_chart_axes(ax)
-    fig.autofmt_xdate()
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
-
-
-def _render_horizontal_bar_chart(df, label_col, value_col, color, x_label=None):
-    fig, ax = plt.subplots(figsize=(4.2, 3.6))
-    bars = ax.barh(df[label_col], df[value_col], color=color, alpha=0.9)
-    ax.invert_yaxis()
-    if x_label:
-        ax.set_xlabel(x_label, color="#546E7A")
-    ax.bar_label(bars, padding=4, color="#1B5E20", fontsize=9)
-    _style_chart_axes(ax)
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
-
-
-def _render_vertical_bar_chart(df, label_col, value_col, colors, y_label=None):
-    fig, ax = plt.subplots(figsize=(7, 3.6))
-    x_pos = range(len(df))
-    bars = ax.bar(x_pos, df[value_col], color=colors)
-    if y_label:
-        ax.set_ylabel(y_label, color="#546E7A")
-    ax.bar_label(bars, padding=3, color="#0D47A1", fontsize=9)
-    ax.set_xticks(list(x_pos))
-    ax.set_xticklabels(df[label_col], rotation=25, ha="right")
-    _style_chart_axes(ax)
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
 
 # Initialize session state
 if 'user' not in st.session_state:
@@ -1053,8 +1082,7 @@ def dashboard_pengepul():
                     [(cp['name'], cp['total_weight'] or 0) for cp in top_5_weight],
                     columns=['Kategori', 'Berat (Kg)']
                 )
-                colors = [plt.cm.Blues(0.35 + 0.6 * i / max(1, len(chart_data) - 1)) for i in range(len(chart_data))]
-                _render_vertical_bar_chart(chart_data, 'Kategori', 'Berat (Kg)', colors, "Berat (Kg)")
+                st.bar_chart(chart_data.set_index('Kategori'))
         else:
             st.info("Belum ada data transaksi")
     
@@ -3418,7 +3446,7 @@ def dashboard_public():
         if daily_data:
             df_trend = pd.DataFrame(daily_data, columns=['Tanggal', 'Total'])
             df_trend['Tanggal'] = pd.to_datetime(df_trend['Tanggal'])
-            st.line_chart(df_trend.set_index('Tanggal'), color="#1E88E5")
+            _render_trend_chart(df_trend)
         else:
             st.info("Data sedang diperbarui...")
 
@@ -3439,7 +3467,7 @@ def dashboard_public():
         
         if top_warga:
             df_top = pd.DataFrame(top_warga, columns=['Nama', 'Transaksi'])
-            st.dataframe(df_top, use_container_width=True, hide_index=True)
+            _render_top_warga_table(df_top, count_col='Transaksi')
         else:
             st.info("Data sedang diperbarui...")
 
@@ -3460,7 +3488,7 @@ def dashboard_public():
     
     if cat_stats:
         df_cat = pd.DataFrame(cat_stats, columns=['Kategori', 'Total Berat (Kg)'])
-        st.bar_chart(df_cat.set_index('Kategori'), color="#4CAF50")
+        _render_category_bar_chart(df_cat)
 
     # Footer
     st.markdown("---")
