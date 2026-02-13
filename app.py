@@ -435,6 +435,12 @@ def _render_audit_log_tab(section_key, default_limit=200):
     )
     st.dataframe(df_logs, use_container_width=True, hide_index=True)
 
+
+def _get_transaction_participant_users():
+    """Users eligible as transaction sellers: warga + admin/panitia + inputer."""
+    allowed_roles = {'warga', 'panitia', 'admin', 'inputer'}
+    return [u for u in get_all_users() if u.get('role') in allowed_roles and u.get('active', 1) == 1]
+
 # Page configuration
 st.set_page_config(
     page_title="Bank Sampah Wani Luru RW 1 - Sistem Manajemen",
