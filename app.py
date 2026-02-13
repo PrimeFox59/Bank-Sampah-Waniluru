@@ -441,6 +441,88 @@ def _get_transaction_participant_users():
     allowed_roles = {'warga', 'panitia', 'admin', 'inputer'}
     return [u for u in get_all_users() if u.get('role') in allowed_roles and u.get('active', 1) == 1]
 
+
+def _render_self_menu(section_key):
+    """Personal view menu for currently logged-in user."""
+    user_id = st.session_state['user']['id']
+
+    tab_perf, tab_trans, tab_keu = st.tabs(["📊 Performa Saya", "📋 Riwayat Transaksi", "💳 Riwayat Keuangan"])
+
+    with tab_perf:
+        period = st.selectbox(
+            "🗓️ Periode",
+            ["Bulan Ini", "3 Bulan Terakhir", "Tahun Ini", "Semua Waktu"],
+            key=f"self_period_{section_key}",
+        )
+
+        today = datetime.now()
+        if period == "Bulan Ini":
+            start_date = today.replace(day=1)
+        elif period == "3 Bulan Terakhir":
+            start_date = today - timedelta(days=90)
+        elif period == "Tahun Ini":
+            start_date = today.replace(month=1, day=1)
+        else:
+            start_date = None
+
+        performance = get_warga_performance(
+            user_id,
+            start_date.strftime('%Y-%m-%d') if start_date else None,
+            today.strftime('%Y-%m-%d'),
+        )
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            ui_metric_card("Total Transaksi", performance['total_transactions'], icon="🧾")
+        with c2:
+            ui_metric_card("Total Berat", f"{performance['total_weight']:.2f} Kg", icon="⚖️")
+        with c3:
+            ui_metric_card("Total Diterima", f"Rp {performance['total_earned']:,.0f}", icon="💰")
+
+    with tab_trans:
+        transactions = get_transactions(warga_id=user_id, limit=100)
+        if transactions:
+            df_trans = pd.DataFrame(
+                [
+                    (
+                        t['category_name'],
+                        t['weight_kg'],
+                        f"Rp {t['price_per_kg']:,.0f}",
+                        f"Rp {t['total_amount']:,.0f}",
+                        f"Rp {t['net_amount']:,.0f}",
+                        t['transaction_date'],
+                        t['processed_by_name'],
+                    )
+                    for t in transactions
+                ],
+                columns=['Kategori', 'Berat (Kg)', 'Harga/Kg', 'Total', 'Diterima', 'Tanggal', 'Diproses Oleh'],
+            )
+            st.dataframe(df_trans, use_container_width=True, hide_index=True)
+        else:
+            st.info("Belum ada riwayat transaksi untuk akun ini.")
+
+    with tab_keu:
+        movements = get_financial_movements(warga_id=user_id, limit=100)
+        if movements:
+            df_movements = pd.DataFrame(
+                [
+                    (
+                        'Penarikan' if m['type'] == 'withdrawal' else 'Deposit',
+                        f"Rp {m['amount']:,.0f}",
+                        f"Rp {m['balance_before']:,.0f}",
+                        f"Rp {m['balance_after']:,.0f}",
+                        m['movement_date'],
+                        m['processed_by_name'],
+                        m['notes'] or '-',
+                    )
+                    for m in movements
+                ],
+                columns=['Tipe', 'Jumlah', 'Saldo Sebelum', 'Saldo Sesudah', 'Tanggal', 'Diproses Oleh', 'Catatan'],
+            )
+            st.dataframe(df_movements, use_container_width=True, hide_index=True)
+        else:
+            st.info("Belum ada riwayat keuangan untuk akun ini.")
+
 # Page configuration
 st.set_page_config(
     page_title="Bank Sampah Wani Luru RW 1 - Sistem Manajemen",
@@ -2558,8 +2640,8 @@ def _render_admin_tab_categories(tab_cat):
 def dashboard_panitia():
     """Dashboard for Admin (legacy panitia role)."""
     
-    tab_dashboard, tab_transaksi, tab_cat, tab_keu, tab_users, tab_audit, tab_laporan, tab_jadwal = st.tabs([
-        "🏠 Dashboard", "🔀 Transaksi", "♻️ Kategori & Harga", "💰 Keuangan", "👥 Manage User", "📜 Audit Log", "📑 Laporan", "⚙️ Pengaturan Jadwal"
+    tab_dashboard, tab_transaksi, tab_cat, tab_keu, tab_users, tab_audit, tab_self, tab_laporan, tab_jadwal = st.tabs([
+        "🏠 Dashboard", "🔀 Transaksi", "♻️ Kategori & Harga", "💰 Keuangan", "👥 Manage User", "📜 Audit Log", "🙋 Menu Saya", "📑 Laporan", "⚙️ Pengaturan Jadwal"
     ])
     
     with tab_dashboard:
@@ -2940,6 +3022,9 @@ def dashboard_panitia():
     with tab_audit:
         _render_audit_log_tab('admin_panitia', default_limit=300)
 
+    with tab_self:
+        _render_self_menu('admin_panitia')
+
     with tab_laporan:
         st.markdown("### 📄 Generate Laporan PDF")
         pdf_col1, pdf_col2, pdf_col3 = st.columns([1, 1, 1])
@@ -3150,12 +3235,15 @@ def dashboard_inputer():
     </div>
     """, unsafe_allow_html=True)
 
-    tab_transaksi, tab_cat, tab_settings = st.tabs([
-        "🔀 Transaksi", "♻️ Kategori & Harga", "⚙️ Pengaturan Akun"
+    tab_transaksi, tab_cat, tab_self, tab_settings = st.tabs([
+        "🔀 Transaksi", "♻️ Kategori & Harga", "🙋 Menu Saya", "⚙️ Pengaturan Akun"
     ])
 
     _render_admin_tab_transaksi(tab_transaksi)
     _render_admin_tab_categories(tab_cat)
+
+    with tab_self:
+        _render_self_menu('inputer')
 
     with tab_settings:
         st.subheader("⚙️ Pengaturan Akun Panitia")
