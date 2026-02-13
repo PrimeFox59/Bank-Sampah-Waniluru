@@ -1948,11 +1948,18 @@ def _render_transaction_input_form():
         with st.form("transaction_form"):
             st.markdown("### 📝 Form Input Transaksi")
 
-            warga_list = get_all_users('warga')
-            warga_options = {f"👤 {w['full_name']} ({w['username']})": w['id'] for w in warga_list}
+            warga_list = _get_transaction_participant_users()
+            warga_options = {f"👤 {w['full_name']} ({w['username']}) - {_display_role_label(w['role'])}": w['id'] for w in warga_list}
 
-            selected_warga = st.selectbox("👤 Pilih Warga", list(warga_options.keys()), 
-                                          help="Pilih warga yang menjual sampah")
+            if not warga_options:
+                st.warning("⚠️ Belum ada user aktif yang bisa dijadikan penjual transaksi.")
+                return
+
+            selected_warga = st.selectbox(
+                "👤 Pilih Penjual",
+                list(warga_options.keys()),
+                help="Pilih user yang menyetor/menjual sampah (Warga/Admin/Panitia/Inputer).",
+            )
 
             categories = get_all_categories()
             category_options = {f"♻️ {c['name']} - Rp {c['price_per_kg']:,.0f}/Kg": c for c in categories}
