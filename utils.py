@@ -348,7 +348,7 @@ def get_warga_performance(warga_id, start_date=None, end_date=None):
         'total_earned': stats[3] or 0
     }
 
-def get_audit_logs(user_id=None, limit=100):
+def get_audit_logs(user_id=None, limit=100, start_date=None, end_date=None):
     """Get audit logs"""
     conn = get_connection()
     cursor = conn.cursor()
@@ -364,6 +364,14 @@ def get_audit_logs(user_id=None, limit=100):
     if user_id:
         query += ' AND al.user_id = ?'
         params.append(user_id)
+
+    if start_date:
+        query += ' AND DATE(al.timestamp) >= ?'
+        params.append(start_date)
+
+    if end_date:
+        query += ' AND DATE(al.timestamp) <= ?'
+        params.append(end_date)
     
     query += ' ORDER BY al.timestamp DESC LIMIT ?'
     params.append(limit)

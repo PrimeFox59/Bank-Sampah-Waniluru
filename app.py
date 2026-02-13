@@ -362,6 +362,79 @@ def _render_category_excel_uploader(section_key):
         st.session_state[result_key] = result
         st.rerun()
 
+
+def _render_audit_log_tab(section_key, default_limit=200):
+    st.subheader("📜 Audit Log Aktivitas User")
+    st.caption("Menampilkan seluruh aktivitas user secara transparan dengan filter user dan rentang tanggal.")
+
+    filter_col1, filter_col2, filter_col3, filter_col4 = st.columns([2, 1, 1, 1])
+
+    all_users = get_all_users()
+    user_filter_options = {"Semua User": None}
+    user_filter_options.update({f"{u['full_name']} ({u['username']})": u['id'] for u in all_users})
+
+    with filter_col1:
+        selected_user_filter = st.selectbox(
+            "Filter User",
+            list(user_filter_options.keys()),
+            key=f"audit_user_{section_key}",
+        )
+
+    with filter_col2:
+        start_date_filter = st.date_input(
+            "Dari Tanggal",
+            value=datetime.now() - timedelta(days=30),
+            key=f"audit_start_{section_key}",
+        )
+
+    with filter_col3:
+        end_date_filter = st.date_input(
+            "Sampai Tanggal",
+            value=datetime.now(),
+            key=f"audit_end_{section_key}",
+        )
+
+    with filter_col4:
+        limit = st.number_input(
+            "Jumlah Record",
+            min_value=10,
+            max_value=5000,
+            value=default_limit,
+            step=10,
+            key=f"audit_limit_{section_key}",
+        )
+
+    if start_date_filter > end_date_filter:
+        st.warning("Rentang tanggal tidak valid. Pastikan tanggal mulai <= tanggal akhir.")
+        return
+
+    logs = get_audit_logs(
+        user_id=user_filter_options[selected_user_filter],
+        limit=int(limit),
+        start_date=start_date_filter,
+        end_date=end_date_filter,
+    )
+
+    if not logs:
+        st.info("Tidak ada log pada filter yang dipilih.")
+        return
+
+    df_logs = pd.DataFrame(
+        [
+            (
+                log['timestamp'],
+                log['username'],
+                log['full_name'],
+                _display_role_label(log['role']),
+                log['action'],
+                log['details'] or '-',
+            )
+            for log in logs
+        ],
+        columns=['Timestamp', 'Username', 'Nama', 'Role', 'Action', 'Details'],
+    )
+    st.dataframe(df_logs, use_container_width=True, hide_index=True)
+
 # Page configuration
 st.set_page_config(
     page_title="Bank Sampah Wani Luru RW 1 - Sistem Manajemen",
@@ -2472,8 +2545,8 @@ def _render_admin_tab_categories(tab_cat):
 def dashboard_panitia():
     """Dashboard for Admin (legacy panitia role)."""
     
-    tab_dashboard, tab_transaksi, tab_cat, tab_keu, tab_users, tab_laporan, tab_jadwal = st.tabs([
-        "🏠 Dashboard", "🔀 Transaksi", "♻️ Kategori & Harga", "💰 Keuangan", "👥 Manage User", "📑 Laporan", "⚙️ Pengaturan Jadwal"
+    tab_dashboard, tab_transaksi, tab_cat, tab_keu, tab_users, tab_audit, tab_laporan, tab_jadwal = st.tabs([
+        "🏠 Dashboard", "🔀 Transaksi", "♻️ Kategori & Harga", "💰 Keuangan", "👥 Manage User", "📜 Audit Log", "📑 Laporan", "⚙️ Pengaturan Jadwal"
     ])
     
     with tab_dashboard:
@@ -2851,6 +2924,9 @@ def dashboard_panitia():
                                 log_audit(user_id, 'CHANGE_PASSWORD', 'Admin mengganti password sendiri')
                                 st.success("✅ Password berhasil diubah")
     
+    with tab_audit:
+        _render_audit_log_tab('admin_panitia', default_limit=300)
+
     with tab_laporan:
         st.markdown("### 📄 Generate Laporan PDF")
         pdf_col1, pdf_col2, pdf_col3 = st.columns([1, 1, 1])
@@ -3522,36 +3598,7 @@ def dashboard_superuser():
                     st.error(msg)
 
     with tab4:
-        st.subheader("Audit Log")
-        
-        col1, col2 = st.columns([1, 3])
-        
-        with col1:
-            st.markdown("### Filter")
-            
-            all_users = get_all_users()
-            user_filter_options = {"Semua User": None}
-            user_filter_options.update({f"{u['full_name']} ({u['username']})": u['id'] for u in all_users})
-            
-            selected_user_filter = st.selectbox("Filter User", list(user_filter_options.keys()))
-            
-            limit = st.number_input("Jumlah Record", min_value=10, max_value=1000, value=100, step=10)
-        
-        with col2:
-            st.markdown("### Log Aktivitas")
-            
-            user_id_filter = user_filter_options[selected_user_filter]
-            logs = get_audit_logs(user_id=user_id_filter, limit=limit)
-            
-            if logs:
-                df_logs = pd.DataFrame(
-                    [(log['username'], log['full_name'], log['role'], log['action'],
-                      log['details'] or '-', log['timestamp']) for log in logs],
-                    columns=['Username', 'Nama', 'Role', 'Action', 'Details', 'Timestamp']
-                )
-                st.dataframe(df_logs, use_container_width=True, hide_index=True)
-            else:
-                st.info("Tidak ada log")
+        _render_audit_log_tab('superuser', default_limit=300)
     
     with tab5:
         st.subheader("Statistik Global")
@@ -3842,6 +3889,7 @@ def main():
                 **Admin dapat:**
                 - ✅ Input transaksi sampah
                 - ✅ Kelola keuangan warga
+                - ✅ Lihat audit log aktivitas
                 - ✅ Buat laporan
                 - ✅ Monitor performa
                 """)
