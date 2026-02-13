@@ -212,7 +212,21 @@ def initialize_system():
     """Complete system initialization"""
     init_database()
     create_default_users()
-    create_default_categories()
+
+    # Seed kategori bawaan hanya sekali agar penghapusan manual tidak muncul lagi saat app restart.
+    category_seeded = get_setting('default_categories_seeded', '0')
+    if category_seeded != '1':
+        conn = get_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT COUNT(*) FROM categories')
+        category_count = cursor.fetchone()[0]
+        conn.close()
+
+        if category_count == 0:
+            create_default_categories()
+
+        set_setting('default_categories_seeded', '1')
+
     print("Database initialized successfully!")
 
 
