@@ -108,19 +108,24 @@ def _render_top_warga_table(df_top, count_col='Jumlah Transaksi'):
 
 
 def _build_category_excel_template():
-    template_df = pd.DataFrame(
+    categories = get_all_categories()
+    template_rows = [
         {
-            'Nama Kategori': ['Plastik Botol', 'Kertas', 'Elektronik Kecil'],
-            'Harga/Kg': [3000, 1000, 8500],
+            'Nama Kategori': c['name'],
+            'Harga/Kg': float(c['price_per_kg']),
         }
-    )
+        for c in categories
+    ]
+    template_df = pd.DataFrame(template_rows, columns=['Nama Kategori', 'Harga/Kg'])
     notes_df = pd.DataFrame(
         {
             'Petunjuk': [
-                'Gunakan sheet Kategori untuk update data.',
+                'Gunakan sheet Kategori untuk replace daftar kategori.',
                 'Kolom wajib: Nama Kategori dan Harga/Kg.',
-                'Nama kategori yang sudah ada akan di-update.',
-                'Nama kategori baru akan ditambahkan otomatis.',
+                'Nama kategori yang sudah ada akan di-update harganya.',
+                'Kategori baru akan ditambahkan otomatis.',
+                'Kategori yang tidak ada di file akan dihapus jika belum pernah dipakai transaksi.',
+                'Tidak boleh ada duplikat nama kategori dalam file (tanpa membedakan huruf besar/kecil).',
             ]
         }
     )
@@ -169,7 +174,7 @@ def _parse_price_value(value):
         return None
 
 
-def _bulk_upsert_categories_from_excel(uploaded_file):
+def _bulk_replace_categories_from_excel(uploaded_file):
     try:
         df = pd.read_excel(uploaded_file, sheet_name='Kategori')
     except ValueError:
@@ -202,7 +207,7 @@ def _bulk_upsert_categories_from_excel(uploaded_file):
 
     entries = {}
     errors = []
-    duplicate_in_file = 0
+    duplicate_lines = []
 
     for idx, row in df.iterrows():
         line_no = idx + 2
@@ -224,8 +229,16 @@ def _bulk_upsert_categories_from_excel(uploaded_file):
 
         key = category_name.casefold()
         if key in entries:
-            duplicate_in_file += 1
+            duplicate_lines.append(line_no)
         entries[key] = {'name': category_name, 'price': parsed_price}
+
+    if duplicate_lines:
+        return False, {
+            'error': 'Terdapat nama kategori duplikat di file. Perbaiki dulu lalu upload ulang.',
+            'errors': [
+                {'Baris': ln, 'Error': 'Duplikat nama kategori (case-insensitive)'} for ln in duplicate_lines
+            ],
+        }
 
     if not entries:
         return False, {'error': 'Tidak ada data valid untuk diproses.', 'errors': errors}
@@ -236,6 +249,8 @@ def _bulk_upsert_categories_from_excel(uploaded_file):
     created = 0
     updated = 0
     skipped = 0
+    deleted = 0
+    blocked_delete = []
 
     for key, payload in entries.items():
         name = payload['name']
@@ -255,28 +270,54 @@ def _bulk_upsert_categories_from_excel(uploaded_file):
             else:
                 errors.append({'Baris': '-', 'Error': f'{name}: {message}'})
 
+    conn = get_connection()
+    cursor = conn.cursor()
+    for key, category in existing.items():
+        if key in entries:
+            continue
+
+        cursor.execute('SELECT COUNT(*) FROM transactions WHERE category_id = ?', (category['id'],))
+        usage_count = cursor.fetchone()[0]
+        if usage_count and usage_count > 0:
+            blocked_delete.append(
+                {
+                    'Kategori': category['name'],
+                    'Alasan': f'Sudah dipakai {usage_count} transaksi',
+                }
+            )
+            continue
+
+        success, message = delete_category(category['id'])
+        if success:
+            deleted += 1
+        else:
+            errors.append({'Baris': '-', 'Error': f"Gagal hapus {category['name']}: {message}"})
+    conn.close()
+
     return True, {
         'created': created,
         'updated': updated,
         'skipped': skipped,
-        'duplicate_in_file': duplicate_in_file,
+        'deleted': deleted,
+        'blocked_delete': blocked_delete,
         'errors': errors,
     }
 
 
 def _render_category_excel_uploader(section_key):
     st.markdown('### 📥 Update Daftar Kategori via Excel')
-    st.caption('Upload file .xlsx untuk update massal kategori dan harga.')
+    st.caption('Upload file .xlsx untuk replace daftar kategori dan harga.')
 
     result_key = f'category_upload_result_{section_key}'
     saved_result = st.session_state.pop(result_key, None)
     if saved_result:
         st.success(
-            f"✅ Selesai diproses. Ditambah: {saved_result['created']}, "
-            f"Diupdate: {saved_result['updated']}, Tidak berubah: {saved_result['skipped']}"
+            f"✅ Sinkron selesai. Ditambah: {saved_result['created']}, Diupdate: {saved_result['updated']}, "
+            f"Dihapus: {saved_result['deleted']}, Tidak berubah: {saved_result['skipped']}"
         )
-        if saved_result['duplicate_in_file'] > 0:
-            st.info(f"ℹ️ Duplikat nama kategori dalam file: {saved_result['duplicate_in_file']} (baris terakhir yang dipakai).")
+        if saved_result['blocked_delete']:
+            st.warning(f"⚠️ {len(saved_result['blocked_delete'])} kategori tidak bisa dihapus karena sudah dipakai transaksi.")
+            st.dataframe(pd.DataFrame(saved_result['blocked_delete']), use_container_width=True, hide_index=True)
         if saved_result['errors']:
             st.warning(f"⚠️ Ada {len(saved_result['errors'])} baris gagal diproses.")
             st.dataframe(pd.DataFrame(saved_result['errors']), use_container_width=True, hide_index=True)
@@ -295,15 +336,15 @@ def _render_category_excel_uploader(section_key):
         'Upload file kategori (.xlsx)',
         type=['xlsx'],
         key=f'upload_category_excel_{section_key}',
-        help='Gunakan template agar format otomatis terbaca.',
+        help='Gunakan template terbaru agar data saat ini terisi otomatis.',
     )
 
-    if st.button('🔄 Proses Update dari Excel', type='primary', use_container_width=True, key=f'process_excel_{section_key}'):
+    if st.button('🔄 Proses Replace dari Excel', type='primary', use_container_width=True, key=f'process_excel_{section_key}'):
         if uploaded_file is None:
             st.warning('Silakan upload file Excel terlebih dahulu.')
             return
 
-        success, result = _bulk_upsert_categories_from_excel(uploaded_file)
+        success, result = _bulk_replace_categories_from_excel(uploaded_file)
         if not success:
             st.error(result.get('error', 'Gagal memproses file Excel.'))
             if result.get('errors'):
@@ -314,8 +355,8 @@ def _render_category_excel_uploader(section_key):
         if user_id:
             log_audit(
                 user_id,
-                'BULK_UPDATE_CATEGORY_EXCEL',
-                f"created={result['created']}, updated={result['updated']}, skipped={result['skipped']}",
+                'BULK_REPLACE_CATEGORY_EXCEL',
+                f"created={result['created']}, updated={result['updated']}, deleted={result['deleted']}, skipped={result['skipped']}",
             )
 
         st.session_state[result_key] = result
